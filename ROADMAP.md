@@ -89,16 +89,16 @@ intenção do usuário.
 
 > Each milestone has a checkbox in its header. Flip `[ ]` → `[x]` as you complete it. Status lives in this document; no external tracker required.
 
-### M0 — [ ] Walking skeleton
+### M0 — [x] Walking skeleton
 
 **Objective:** Provar a arquitetura fim-a-fim na fatia mais fina: criar uma skill (zip
 `SKILL.md`) via LRO e recuperá-la, ponta a ponta, na stack da casa.
 
 **Definition of done (all must hold):**
 
-- [ ] Monorepo pnpm (`packages/core` + `packages/api`) compila em TS strict; Hono sobe com `/v1/health`.
-- [ ] `POST /v1/skills` enfileira uma operação via pg-boss e `GET /v1/operations/{id}` reporta `done`; `GET /v1/skills/{id}` retorna a skill persistida (Postgres + Drizzle, migrations aplicadas).
-- [ ] Teste E2E: criar → aguardar operação → obter a skill, verde no CI.
+- [x] Monorepo pnpm (`packages/core` + `packages/api`) compila em TS strict; Hono sobe com `/v1/health`.
+- [x] `POST /v1/skills` enfileira uma operação via pg-boss e `GET /v1/operations/{id}` reporta `done`; `GET /v1/skills/{id}` retorna a skill persistida (Postgres + Drizzle, migrations aplicadas).
+- [x] Teste E2E: criar → aguardar operação → obter a skill, verde no CI.
 
 **Dependencies:** none (this is the foundation).
 

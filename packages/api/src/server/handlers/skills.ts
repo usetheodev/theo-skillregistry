@@ -1,5 +1,5 @@
 import { createId } from '@paralleldrive/cuid2';
-import { SkillInputSchema } from '@usetheo/skillregistry/contract';
+import { SkillInputSchema, SkillSchema } from '@usetheo/skillregistry/contract';
 import { type Hono } from 'hono';
 import type PgBoss from 'pg-boss';
 
@@ -30,16 +30,24 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       skillId: parsed.data.skill_id,
       type: JOB_NAMES.CREATE_SKILL,
     });
-    await deps.queue.send(
-      JOB_NAMES.CREATE_SKILL,
-      {
-        operation_id: operationId,
-        skill_id: parsed.data.skill_id,
-        name: parsed.data.name,
-        description: parsed.data.description,
-      },
-      CREATE_SKILL_SEND_OPTIONS,
-    );
+    // Insert-then-enqueue is not atomic: if enqueue fails, mark the operation
+    // failed immediately so it is never orphaned in CREATING (fail-loud).
+    try {
+      await deps.queue.send(
+        JOB_NAMES.CREATE_SKILL,
+        {
+          operation_id: operationId,
+          skill_id: parsed.data.skill_id,
+          name: parsed.data.name,
+          description: parsed.data.description,
+        },
+        CREATE_SKILL_SEND_OPTIONS,
+      );
+    } catch (err) {
+      await deps.operationsStore.updateState(operationId, 'failed', 'failed to enqueue create_skill job');
+      deps.logger.error({ operation_id: operationId, skill_id: parsed.data.skill_id }, 'create_skill enqueue failed');
+      throw err;
+    }
     deps.logger.info({ operation_id: operationId, skill_id: parsed.data.skill_id }, 'create_skill enqueued');
 
     return c.json({ operation_id: operationId, skill_id: parsed.data.skill_id }, 202);
@@ -51,6 +59,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
     if (skill === undefined) {
       return c.json({ error: 'not_found' }, 404);
     }
-    return c.json(skill, 200);
+    // Validate the response against the public contract before returning.
+    return c.json(SkillSchema.parse(skill), 200);
   });
 }

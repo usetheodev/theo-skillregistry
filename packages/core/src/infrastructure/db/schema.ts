@@ -19,6 +19,9 @@ export const skills = pgTable('skills', {
  */
 export const operations = pgTable('operations', {
   operationId: text('operation_id').primaryKey(),
+  // NO foreign key to skills.skill_id BY DESIGN: the operation row is created
+  // (CREATING) before the skill exists — the worker inserts the skill only on
+  // success. An FK here would make the operation insert fail. Do not "fix" this.
   skillId: text('skill_id').notNull(),
   type: text('type').notNull(),
   state: text('state').notNull(),

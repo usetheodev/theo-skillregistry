@@ -65,9 +65,73 @@ describeIntegration('M0 walking skeleton E2E (T3.3)', () => {
     expect(((await get.json()) as { name: string }).name).toBe('Demo');
   });
 
+  it('POST returns 500 and marks the operation failed when enqueue fails', async () => {
+    const throwingQueue = {
+      send: () => Promise.reject(new Error('enqueue down')),
+    } as unknown as PgBoss;
+    const app = createApp({ pool: getPool(), queue: throwingQueue, logger: createNoopLogger() });
+
+    const res = await app.request('/v1/skills', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ skill_id: 'enqueue-fail', name: 'X', description: '' }),
+    });
+    expect(res.status).toBe(500);
+
+    const row = await getPool().query<{ state: string }>(
+      "SELECT state FROM operations WHERE skill_id = 'enqueue-fail'",
+    );
+    expect(row.rows[0]?.state).toBe('failed'); // not orphaned in CREATING
+  });
+
   it('GET unknown skill and operation return 404', async () => {
     const app = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger() });
     expect((await app.request('/v1/skills/does-not-exist')).status).toBe(404);
     expect((await app.request('/v1/operations/does-not-exist')).status).toBe(404);
+  });
+
+  // Concurrent test (T3.3): N parallel POSTs with the same skill_id race through
+  // the real pg-boss worker — exactly one skill is created, the rest fail.
+  it('concurrent POST same skill_id: exactly one done, the rest failed (one skill row)', async () => {
+    const app = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger() });
+    const N = 10;
+
+    const creates = await Promise.all(
+      Array.from({ length: N }, async () =>
+        app.request('/v1/skills', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ skill_id: 'race-skill', name: 'Race', description: '' }),
+        }),
+      ),
+    );
+    expect(creates.every((r) => r.status === 202)).toBe(true);
+    const opIds = await Promise.all(
+      creates.map(async (r) => ((await r.json()) as { operation_id: string }).operation_id),
+    );
+
+    // Poll all operations to a terminal state in parallel (wall-clock = slowest,
+    // not the sum) with a generous budget to stay deterministic under load.
+    const states = await Promise.all(
+      opIds.map(async (opId) => {
+        for (let i = 0; i < 200; i++) {
+          const res = await app.request(`/v1/operations/${opId}`);
+          const op = (await res.json()) as OperationBody;
+          if (op.state === 'done' || op.state === 'failed') {
+            return op.state;
+          }
+          await sleep(50);
+        }
+        throw new Error(`operation ${opId} did not reach a terminal state`);
+      }),
+    );
+
+    expect(states.filter((s) => s === 'done')).toHaveLength(1);
+    expect(states.filter((s) => s === 'failed')).toHaveLength(N - 1);
+
+    const count = await getPool().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM skills WHERE skill_id = 'race-skill'",
+    );
+    expect(count.rows[0]?.count).toBe('1');
   });
 });

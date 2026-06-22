@@ -1,4 +1,4 @@
-import { type Operation, type OperationState } from '@usetheo/skillregistry/contract';
+import { type Operation, type OperationState, OperationStateSchema } from '@usetheo/skillregistry/contract';
 import { operations } from '@usetheo/skillregistry/db';
 import { eq } from 'drizzle-orm';
 
@@ -45,7 +45,9 @@ export function createOperationsStore(db: Db): OperationsStore {
         operation_id: row.operationId,
         skill_id: row.skillId,
         type: row.type,
-        state: row.state as OperationState,
+        // Validate the persisted state against the contract — fail loud on an
+        // out-of-band value rather than trusting the free-text column blindly.
+        state: OperationStateSchema.parse(row.state),
         error: row.error,
       };
     },

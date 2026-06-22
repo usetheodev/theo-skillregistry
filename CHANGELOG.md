@@ -8,6 +8,20 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.1.0] - 2026-06-22
+
+### Added
 - Documento de Requisitos de Produto inicial (`PRD.md`) definindo escopo, modelo de
   domínio, decisões de arquitetura e plano de releases do Theo Skill Registry (#1)
 - `README.md` com visão geral, stack, arquitetura e guia de início (#1)
@@ -23,9 +37,11 @@ ao [Semantic Versioning](https://semver.org/).
   com máquina de estados de operação e graceful shutdown ordenado (server→queue→pool), validado
   por teste E2E criar→aguardar→obter contra Postgres real (#3)
 
+
 ### Fixed
 - M0: criação de skill com `skillId` duplicado sob concorrência resolve de forma determinística
   (exatamente uma skill criada; demais operações concluem como `failed`) — endurecido após
   `/review` com teste E2E de concorrência (#3)
 - M0: falha ao enfileirar a operação marca-a imediatamente como `failed` em vez de deixá-la
   presa em `CREATING` (#3)
+

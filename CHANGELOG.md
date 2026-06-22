@@ -22,3 +22,10 @@ ao [Semantic Versioning](https://semver.org/).
   `GET /v1/skills/{id}`, persistência PostgreSQL + Drizzle (migrations), worker de `create_skill`
   com máquina de estados de operação e graceful shutdown ordenado (server→queue→pool), validado
   por teste E2E criar→aguardar→obter contra Postgres real (#3)
+
+### Fixed
+- M0: criação de skill com `skillId` duplicado sob concorrência resolve de forma determinística
+  (exatamente uma skill criada; demais operações concluem como `failed`) — endurecido após
+  `/review` com teste E2E de concorrência (#3)
+- M0: falha ao enfileirar a operação marca-a imediatamente como `failed` em vez de deixá-la
+  presa em `CREATING` (#3)

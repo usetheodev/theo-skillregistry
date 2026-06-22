@@ -1,0 +1,31 @@
+{
+  "name": "@usetheo/skillregistry-monorepo",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@11.1.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:integration": "pnpm -r test:integration",
+    "build": "pnpm -r build",
+    "db:push": "pnpm --filter @usetheo/skillregistry db:push",
+    "db:generate": "pnpm --filter @usetheo/skillregistry db:generate",
+    "compose:up": "docker compose up -d pgvector",
+    "compose:down": "docker compose down",
+    "start": "pnpm --filter @usetheo/skillregistry-api start"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-import": "^2.30.0",
+    "jiti": "^2.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^4.0.0"
+  }
+}

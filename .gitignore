@@ -28,3 +28,6 @@ coverage/
 .active_plan
 .progress-*.json
 .compaction-snapshots/
+
+# SOTA reference clones (study-only material — never committed; see references-catalog.md)
+knowledge-base/references/

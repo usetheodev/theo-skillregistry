@@ -1,0 +1,30 @@
+{
+  "name": "@usetheo/skillregistry-api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts' --no-error-on-unmatched-pattern",
+    "test": "vitest run --config vitest.contract.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@paralleldrive/cuid2": "^2.3.1",
+    "@usetheo/skillregistry": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "hono": "^4.12.25",
+    "pg": "^8.13.0",
+    "pg-boss": "^10.4.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.0"
+  }
+}

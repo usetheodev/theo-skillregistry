@@ -1,0 +1,30 @@
+# Node / TypeScript (pnpm monorepo)
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+coverage/
+.turbo/
+.pnpm-store/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+*.log
+
+# Cycle (.claude/) — Python tooling caches & local artifacts
+.claude/**/__pycache__/
+.claude/**/*.pyc
+.claude/.mypy_cache/
+.claude/.ruff_cache/
+.claude/.pytest_cache/
+.claude/.hypothesis/
+
+# Cycle local state (not part of the committed kit)
+.active_plan
+.progress-*.json
+.compaction-snapshots/

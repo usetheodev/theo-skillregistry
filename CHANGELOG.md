@@ -8,6 +8,9 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- M3: porta `EmbeddingProvider` (DIP) com adapters `stub` (determinístico, SHA-256 seeded +
+  L2-normalizado, offline) e `openai` (SDK; `local` = mesmo adapter com `OPENAI_BASE_URL`);
+  dimensão pinada em 1536 com guard fail-fast (`assertEmbeddingDim`) (#6)
 
 ### Changed
 

@@ -4,6 +4,19 @@ export {
   parseSkillId,
 } from './domain/skill-id.js';
 export {
+  type EmbeddingProvider,
+  type EmbedOptions,
+  EmbedderError,
+  EMBEDDING_DIM,
+  assertEmbeddingDim,
+  createStubEmbedder,
+  stubEmbed,
+  type StubEmbedderOptions,
+  createOpenAIEmbedder,
+  type OpenAIEmbedderOptions,
+  type OpenAIEmbeddingsClient,
+} from './domain/embedders/index.js';
+export {
   type FrontmatterErrorCode,
   parseFrontmatter,
   type SkillFrontmatter,

@@ -11,6 +11,10 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+// Single source of truth for the embedding dimension lives in the domain port;
+// infra MAY depend on domain (allowed direction). Avoids drift (DRY).
+import { EMBEDDING_DIM } from '../../domain/embedders/types.js';
+
 /** Postgres `bytea` column type (Drizzle has no native helper). */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
@@ -18,8 +22,8 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
-/** Embedding dimension pinned at 1536 (matches the EmbeddingProvider contract). */
-export const EMBEDDING_COLUMN_DIM = 1536;
+/** Embedding column dimension — derived from the domain contract (no drift). */
+export const EMBEDDING_COLUMN_DIM = EMBEDDING_DIM;
 
 /**
  * Postgres `vector(1536)` column type (pgvector). Encodes `number[]` to the

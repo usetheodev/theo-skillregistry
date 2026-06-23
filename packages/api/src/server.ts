@@ -11,7 +11,12 @@ import {
 import { createJsonLogger } from './server/logger.js';
 import { selectEmbedder } from './server/providers/embedder-selection.js';
 import { setupGracefulDrain } from './server/queue/graceful-drain.js';
-import { createQueue, JOB_NAMES, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from './server/queue/queue.js';
+import {
+  createQueue,
+  EMBED_SKILL_DLQ_QUEUE_NAME,
+  JOB_NAMES,
+  WEBHOOK_DELIVERY_DLQ_QUEUE_NAME,
+} from './server/queue/queue.js';
 import { createEmbeddingsStore } from './server/store/embeddings-store.js';
 import { createWebhookEndpointsStore } from './server/store/webhook-endpoints-store.js';
 import {
@@ -49,19 +54,26 @@ async function main(): Promise<void> {
   await queue.createQueue(JOB_NAMES.WEBHOOK_DELIVERY);
   await queue.createQueue(WEBHOOK_DELIVERY_DLQ_QUEUE_NAME);
   await queue.createQueue(JOB_NAMES.EMBED_SKILL);
+  await queue.createQueue(EMBED_SKILL_DLQ_QUEUE_NAME);
 
   const db = createDb(pool);
   const endpointsStore = createWebhookEndpointsStore(db);
   const embeddingsStore = createEmbeddingsStore(db);
 
-  // Select the embedding provider and guard its dimension at boot (fail-fast).
+  // Select the embedding provider. Probe the dimension at boot ONLY for the
+  // deterministic stub (free, instant). For network providers a live boot probe
+  // would couple HTTP-API liveness to the embeddings API and spend a call on every
+  // restart — the per-embedding guard in the embed worker enforces the dimension
+  // there instead (fail-fast without crashlooping the whole server).
   const embedder = selectEmbedder();
-  assertEmbeddingDim(await embedder.embed('boot dimension probe'));
+  if (embedder.provider === 'stub') {
+    assertEmbeddingDim(await embedder.embed('boot dimension probe'));
+  }
   logger.info({ provider: embedder.provider, model: embedder.model }, 'embedder selected');
 
   // onTerminal composes the webhook fan-out + the embed enqueue (ACTIVE only).
   const webhookEnqueuer = createWebhookEnqueuer({ endpointsStore, queue, logger });
-  const embedEnqueuer = createEmbedEnqueuer({ queue, logger });
+  const embedEnqueuer = createEmbedEnqueuer({ queue, embeddingsStore, logger });
   const handlers = buildWorkerHandlers(pool, logger, composeTerminalHooks(webhookEnqueuer, embedEnqueuer));
   await registerWorker({
     queue,
@@ -74,6 +86,7 @@ async function main(): Promise<void> {
   await registerEmbedWorker({
     queue,
     handler: createEmbedSkillHandler({ embeddingsStore, embedder, logger }),
+    logger,
   });
 
   // Webhook delivery worker + dead-letter consumer (SSRF-safe pinned egress).

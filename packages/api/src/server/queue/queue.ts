@@ -74,15 +74,25 @@ export interface WebhookDeliveryJobData {
   readonly payload: Record<string, unknown>;
 }
 
-/** M3: embed the skill's CURRENT revision (worker resolves latest_revision_id). */
+/** M3: embed a SPECIFIC revision (resolved at enqueue time, singleton-keyed by it
+ * so each revision is embedded exactly once and an update never dedups the new
+ * revision against the previous one). */
 export interface EmbedSkillJobData {
   readonly skill_id: string;
+  readonly revision_id: string;
 }
 
-/** Embed jobs: retry transient embedder/DB failures with backoff (2,4,8,16s). */
+export const EMBED_SKILL_DLQ_QUEUE_NAME = 'embed_skill_dlq';
+
+/** Embed jobs: retry transient embedder/DB failures with backoff, then dead-letter. */
 export const EMBED_SKILL_SEND_OPTIONS: Readonly<
-  Pick<PgBoss.SendOptions, 'retryLimit' | 'retryDelay' | 'retryBackoff'>
-> = Object.freeze({ retryLimit: 4, retryDelay: 2, retryBackoff: true });
+  Pick<PgBoss.SendOptions, 'retryLimit' | 'retryDelay' | 'retryBackoff' | 'deadLetter'>
+> = Object.freeze({
+  retryLimit: 4,
+  retryDelay: 2,
+  retryBackoff: true,
+  deadLetter: EMBED_SKILL_DLQ_QUEUE_NAME,
+});
 
 /** Dedup window so two terminal events for the same skill collapse to one embed. */
 export const EMBED_SKILL_SINGLETON_SECONDS = 30;

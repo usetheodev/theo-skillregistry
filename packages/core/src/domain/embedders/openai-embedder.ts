@@ -18,6 +18,9 @@ export interface OpenAIEmbeddingsClient {
   };
 }
 
+/** Factory for the SDK client (test seam — lets tests assert baseURL wiring). */
+export type OpenAIClientFactory = (config: { apiKey: string; baseURL?: string }) => OpenAIEmbeddingsClient;
+
 export interface OpenAIEmbedderOptions {
   /** Resolved model. Default `text-embedding-3-small` (1536-dim). */
   model?: string;
@@ -29,15 +32,24 @@ export interface OpenAIEmbedderOptions {
   baseURL?: string;
   /** Injected client (test seam / advanced reuse). Skips lazy SDK load. */
   client?: OpenAIEmbeddingsClient;
+  /** Injected client factory (test seam for the baseURL/lazy-load path). */
+  clientFactory?: OpenAIClientFactory;
   /** Max retries on transient errors. Default 3. */
   maxRetries?: number;
   /** Initial backoff (ms). Default 500. */
   initialBackoffMs?: number;
+  /**
+   * Max characters per input — a safety truncation so an oversized SKILL.md body
+   * never trips the model's context limit (a 400 the embedder cannot recover
+   * from). ~4 chars/token keeps the default well under the 8191-token ceiling.
+   */
+  maxInputChars?: number;
 }
 
 const DEFAULT_MODEL = 'text-embedding-3-small';
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_INITIAL_BACKOFF_MS = 500;
+const DEFAULT_MAX_INPUT_CHARS = 30_000; // ~7500 tokens, safely under 8191
 
 function isTransient(err: unknown): boolean {
   if (err !== null && typeof err === 'object') {
@@ -74,6 +86,12 @@ async function loadDefaultClient(opts: OpenAIEmbedderOptions): Promise<OpenAIEmb
   if (apiKey === undefined || apiKey === '') {
     throw new EmbedderError('OPENAI_API_KEY is required for the openai embedder', null, {});
   }
+  const baseURL = opts.baseURL ?? process.env['OPENAI_BASE_URL'];
+  const config = baseURL !== undefined && baseURL !== '' ? { apiKey, baseURL } : { apiKey };
+
+  if (opts.clientFactory !== undefined) {
+    return opts.clientFactory(config);
+  }
   let OpenAI: new (o: { apiKey: string; baseURL?: string }) => OpenAIEmbeddingsClient;
   try {
     // Lazy import — `openai` is an optionalDependency.
@@ -83,8 +101,7 @@ async function loadDefaultClient(opts: OpenAIEmbedderOptions): Promise<OpenAIEmb
   } catch {
     throw new EmbedderError('the optional "openai" package is not installed', null, {});
   }
-  const baseURL = opts.baseURL ?? process.env['OPENAI_BASE_URL'];
-  return new OpenAI(baseURL !== undefined && baseURL !== '' ? { apiKey, baseURL } : { apiKey });
+  return new OpenAI(config);
 }
 
 /** Build an OpenAI `EmbeddingProvider`. Injected `client` skips the lazy SDK load. */
@@ -93,6 +110,7 @@ export function createOpenAIEmbedder(opts: OpenAIEmbedderOptions = {}): Embeddin
   const dimensions = opts.dimensions ?? EMBEDDING_DIM;
   const maxRetries = opts.maxRetries ?? DEFAULT_MAX_RETRIES;
   const initialBackoffMs = opts.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS;
+  const maxInputChars = opts.maxInputChars ?? DEFAULT_MAX_INPUT_CHARS;
 
   let clientPromise: Promise<OpenAIEmbeddingsClient> | undefined =
     opts.client !== undefined ? Promise.resolve(opts.client) : undefined;
@@ -103,10 +121,11 @@ export function createOpenAIEmbedder(opts: OpenAIEmbedderOptions = {}): Embeddin
 
   async function callBatch(texts: string[], embedOpts?: EmbedOptions): Promise<number[][]> {
     const client = await getClient();
+    const input = texts.map((t) => (t.length > maxInputChars ? t.slice(0, maxInputChars) : t));
     const response = await withBackoff(
       () =>
         client.embeddings.create(
-          { model, input: texts, dimensions },
+          { model, input, dimensions },
           embedOpts?.signal !== undefined ? { signal: embedOpts.signal } : undefined,
         ),
       maxRetries,

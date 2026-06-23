@@ -15,10 +15,12 @@ ao [Semantic Versioning](https://semver.org/).
   `(revision_id, provider, model)`; índice HNSW cosine) + coluna `skill_revisions.skill_md`
   (fonte do embedding capturada no ingest); extensão `vector` no bootstrap da migração (#6)
 - M3: geração e indexação assíncrona de embeddings — seleção de provider por env (`OPENAI_API_KEY`
-  → openai com `OPENAI_BASE_URL` opcional; senão stub) com guard de dimensão no boot; job
-  `embed_skill` disparado no terminal ACTIVE de create/update (fora do caminho da resposta);
-  embed worker gera `name+description+corpo`, valida a dimensão (fail-fast) e faz upsert idempotente
-  (`ON CONFLICT (revision_id, provider, model) DO NOTHING`); busca por similaridade cosseno consultável (#6)
+  → openai com `OPENAI_BASE_URL` opcional; senão stub) com guard de dimensão (boot no stub +
+  por embedding no worker); job `embed_skill` chaveado por revisão (cada revisão embeddada
+  exatamente uma vez; update nunca dedupa contra a revisão anterior) disparado no terminal ACTIVE
+  de create/update; embed worker gera `name+description+corpo`, valida a dimensão (fail-fast) e
+  faz upsert idempotente (`ON CONFLICT (revision_id, provider, model) DO NOTHING`); dead-letter
+  observável para embeds esgotados; busca por similaridade cosseno consultável (#6)
 
 ### Changed
 

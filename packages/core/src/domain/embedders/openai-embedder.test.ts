@@ -3,34 +3,48 @@ import { describe, expect, it, vi } from 'vitest';
 import { createOpenAIEmbedder, type OpenAIEmbeddingsClient } from './openai-embedder.js';
 import { EMBEDDING_DIM } from './types.js';
 
-function fakeClient(vector: number[], opts: { failTimes?: number } = {}): { client: OpenAIEmbeddingsClient; calls: () => number } {
+const vec = (): number[] => new Array<number>(EMBEDDING_DIM).fill(0).map((_, i) => (i % 7) / 7 - 0.5);
+
+interface Captured {
+  input?: string[];
+  signal?: AbortSignal | undefined;
+}
+
+/** Fake client: programmable per-call failures (status code or AbortError). */
+function fakeClient(opts: { failWith?: (number | 'abort')[] } = {}): {
+  client: OpenAIEmbeddingsClient;
+  calls: () => number;
+  captured: Captured;
+} {
+  const failures = [...(opts.failWith ?? [])];
   let calls = 0;
-  let fails = opts.failTimes ?? 0;
+  const captured: Captured = {};
   const client: OpenAIEmbeddingsClient = {
     embeddings: {
-      create: (params) => {
+      create: (params, options) => {
         calls += 1;
-        if (fails > 0) {
-          fails -= 1;
-          const err = Object.assign(new Error('temporary'), { status: 503 });
-          return Promise.reject(err);
+        captured.input = params.input;
+        captured.signal = options?.signal;
+        const fail = failures.shift();
+        if (fail === 'abort') {
+          return Promise.reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
         }
-        return Promise.resolve({ data: params.input.map(() => ({ embedding: vector })) });
+        if (typeof fail === 'number') {
+          return Promise.reject(Object.assign(new Error(`http ${fail}`), { status: fail }));
+        }
+        return Promise.resolve({ data: params.input.map(() => ({ embedding: vec() })) });
       },
     },
   };
-  return { client, calls: () => calls };
+  return { client, calls: () => calls, captured };
 }
-
-const vec = (): number[] => new Array(EMBEDDING_DIM).fill(0).map((_, i) => (i % 7) / 7 - 0.5);
 
 describe('createOpenAIEmbedder', () => {
   it('calls the injected client and returns the vector', async () => {
-    const { client } = fakeClient(vec());
+    const { client } = fakeClient();
     const e = createOpenAIEmbedder({ client });
     expect(e.provider).toBe('openai');
-    const v = await e.embed('hello');
-    expect(v).toHaveLength(EMBEDDING_DIM);
+    expect(await e.embed('hello')).toHaveLength(EMBEDDING_DIM);
   });
 
   it('passes model + dimensions to the client', async () => {
@@ -39,22 +53,71 @@ describe('createOpenAIEmbedder', () => {
     );
     const e = createOpenAIEmbedder({ client: { embeddings: { create } }, model: 'text-embedding-3-small' });
     await e.embed('x');
-    expect(create).toHaveBeenCalledOnce();
     const arg = create.mock.calls[0]![0];
     expect(arg.model).toBe('text-embedding-3-small');
     expect(arg.dimensions).toBe(EMBEDDING_DIM);
   });
 
-  it('retries on a transient (5xx) error then succeeds', async () => {
-    const { client, calls } = fakeClient(vec(), { failTimes: 1 });
+  it('threads the baseURL through to the client factory (the "local" deployment)', async () => {
+    let captured: { apiKey: string; baseURL?: string } | undefined;
+    const e = createOpenAIEmbedder({
+      apiKey: 'sk-test',
+      baseURL: 'http://localhost:1234/v1',
+      clientFactory: (config) => {
+        captured = config;
+        return fakeClient().client;
+      },
+    });
+    await e.embed('x');
+    expect(captured).toEqual({ apiKey: 'sk-test', baseURL: 'http://localhost:1234/v1' });
+  });
+
+  it('passes the AbortSignal to the client and does NOT retry on AbortError', async () => {
+    const { client, calls, captured } = fakeClient({ failWith: ['abort'] });
     const e = createOpenAIEmbedder({ client, maxRetries: 3, initialBackoffMs: 1 });
-    const v = await e.embed('retry me');
-    expect(v).toHaveLength(EMBEDDING_DIM);
-    expect(calls()).toBe(2); // 1 failure + 1 success
+    const ac = new AbortController();
+    await expect(e.embed('x', { signal: ac.signal })).rejects.toThrow();
+    expect(captured.signal).toBe(ac.signal); // signal threaded through
+    expect(calls()).toBe(1); // abort is terminal — NOT retried
+  });
+
+  it('retries on 429 then succeeds', async () => {
+    const { client, calls } = fakeClient({ failWith: [429] });
+    const e = createOpenAIEmbedder({ client, maxRetries: 3, initialBackoffMs: 1 });
+    await e.embed('x');
+    expect(calls()).toBe(2);
+  });
+
+  it('retries on 5xx then succeeds', async () => {
+    const { client, calls } = fakeClient({ failWith: [503] });
+    const e = createOpenAIEmbedder({ client, maxRetries: 3, initialBackoffMs: 1 });
+    await e.embed('x');
+    expect(calls()).toBe(2);
+  });
+
+  it('fails FAST on a non-transient 4xx (no retry)', async () => {
+    const { client, calls } = fakeClient({ failWith: [400] });
+    const e = createOpenAIEmbedder({ client, maxRetries: 3, initialBackoffMs: 1 });
+    await expect(e.embed('x')).rejects.toThrow();
+    expect(calls()).toBe(1);
+  });
+
+  it('gives up after exhausting retries on persistent 5xx', async () => {
+    const { client, calls } = fakeClient({ failWith: [500, 500, 500, 500, 500] });
+    const e = createOpenAIEmbedder({ client, maxRetries: 2, initialBackoffMs: 1 });
+    await expect(e.embed('x')).rejects.toThrow();
+    expect(calls()).toBe(3); // initial + 2 retries
+  });
+
+  it('truncates an oversized input to the char limit (safety guard)', async () => {
+    const { client, captured } = fakeClient();
+    const e = createOpenAIEmbedder({ client, maxInputChars: 10 });
+    await e.embed('x'.repeat(50));
+    expect(captured.input?.[0]).toHaveLength(10);
   });
 
   it('embedBatch returns one vector per input', async () => {
-    const { client } = fakeClient(vec());
+    const { client } = fakeClient();
     const e = createOpenAIEmbedder({ client });
     const out = await e.embedBatch(['a', 'b', 'c']);
     expect(out).toHaveLength(3);

@@ -169,7 +169,7 @@ provider de embeddings plugável (DIP), como nos demais serviços Theo.
 
 ---
 
-### M4 — [ ] Busca híbrida transparente (RetrieveSkills)
+### M4 — [x] Busca híbrida transparente (RetrieveSkills)
 
 **Objective:** Entregar a descoberta por intenção que supera o Google: híbrida (keyword +
 vetor) com reranking e **score explícito** na resposta.

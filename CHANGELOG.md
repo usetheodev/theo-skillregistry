@@ -14,6 +14,9 @@ ao [Semantic Versioning](https://semver.org/).
 - M4: porta `SkillRetriever` (DIP) com adapters vector (cosine pgvector da revisão corrente, guard
   de dimensão), keyword (FTS `websearch_to_tsquery` + `ts_rank`) e hybrid (fusão RRF k=60
   calibration-free, degradação graciosa); `ParamBuilder` para binding `$N` seguro (#7)
+- M4: endpoint `GET /v1/skills:retrieve?query=...&topK=...&strategy=...` — busca híbrida (default)
+  com `score` explícito por resultado e `trace_id`; dispatcher por strategy (vector/keyword/hybrid);
+  métrica `retrieve` (latency_ms + top_score) instrumentada no caminho (north-star) (#7)
 
 ### Changed
 

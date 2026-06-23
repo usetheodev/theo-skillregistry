@@ -8,8 +8,14 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- M5: orquestrador único `validateSkillPayload` no `core` — os 4 checks de skill (zip-safety →
+  frontmatter Theokit → secret scan) em uma fonte de verdade compartilhada pelo servidor e (em
+  breve) pela CLI; resultado estruturado por regra (DRY — sem divergência) (#8)
 
 ### Changed
+- M5: a fronteira do servidor (`POST`/`PATCH /v1/skills`) passa a delegar a validação ao
+  `validateSkillPayload` do `core` em vez de orquestrar os checks inline (mesmo comportamento/códigos
+  de erro 400; elimina duplicação de lógica) (#8)
 
 ### Deprecated
 

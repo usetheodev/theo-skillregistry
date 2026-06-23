@@ -51,6 +51,13 @@ export {
   type SecretScanner,
 } from './domain/secret-scanner.js';
 export {
+  type SkillValidationDeps,
+  type SkillValidationOk,
+  type SkillValidationFail,
+  type SkillValidationResult,
+  validateSkillPayload,
+} from './domain/skill-validation.js';
+export {
   MAX_COMPRESSION_RATIO,
   MAX_DESCRIPTION_LENGTH,
   MAX_FOLDER_DEPTH,

@@ -87,6 +87,21 @@ const liveColumns = {
   updateTime: skills.updateTime,
 };
 
+/**
+ * Rebuild `skills.search_text` (M4 FTS source) from the skill's CURRENT
+ * name + description + latest-revision SKILL.md body. Run inside the same write
+ * so the lexical index is always consistent — including metadata-only updates
+ * that do not create a new revision.
+ */
+function refreshSearchText(executor: { execute: (q: ReturnType<typeof sql>) => Promise<unknown> }, skillId: string): Promise<unknown> {
+  return executor.execute(sql`
+    UPDATE skills s
+    SET search_text = s.name || ' ' || s.description || ' ' || coalesce(r.skill_md, '')
+    FROM skill_revisions r
+    WHERE r.revision_id = s.latest_revision_id AND s.skill_id = ${skillId}
+  `);
+}
+
 export function createSkillsStore(db: Db): SkillsStore {
   return {
     async createWithRevision(input) {
@@ -130,6 +145,7 @@ export function createSkillsStore(db: Db): SkillsStore {
           frontmatter: input.frontmatter,
           skillMd: input.skillMd,
         });
+        await refreshSearchText(tx, input.skillId);
       });
     },
 
@@ -148,6 +164,7 @@ export function createSkillsStore(db: Db): SkillsStore {
           .update(skills)
           .set({ latestRevisionId: revisionId, updateTime: new Date() })
           .where(eq(skills.skillId, skillId));
+        await refreshSearchText(tx, skillId);
       });
       return revisionId;
     },
@@ -160,7 +177,10 @@ export function createSkillsStore(db: Db): SkillsStore {
       if (fields.description !== undefined) {
         patch['description'] = fields.description;
       }
-      await db.update(skills).set(patch).where(eq(skills.skillId, skillId));
+      await db.transaction(async (tx) => {
+        await tx.update(skills).set(patch).where(eq(skills.skillId, skillId));
+        await refreshSearchText(tx, skillId);
+      });
     },
 
     async getView(skillId) {

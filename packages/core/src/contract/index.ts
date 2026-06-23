@@ -97,3 +97,26 @@ export const OperationSchema = z.object({
   error: z.string().nullable(),
 });
 export type Operation = z.infer<typeof OperationSchema>;
+
+/** Retrieval strategy (M4). `hybrid` fuses lexical + vector via RRF. */
+export const RetrieveStrategySchema = z.enum(['vector', 'keyword', 'hybrid']);
+export type RetrieveStrategy = z.infer<typeof RetrieveStrategySchema>;
+
+/** Query params for GET /v1/skills:retrieve (M4). */
+export const RetrieveParamsSchema = z.object({
+  query: z.string().min(1, 'query is required').max(8192),
+  top_k: z.coerce.number().int().min(1).max(50).default(5),
+  strategy: RetrieveStrategySchema.default('hybrid'),
+});
+export type RetrieveParamsInput = z.infer<typeof RetrieveParamsSchema>;
+
+/** A scored retrieve result. Score semantics are STRATEGY-DEPENDENT (cosine for
+ * vector ~0.7-1.0, ts_rank for keyword, RRF fraction ~1/60 for hybrid) — clients
+ * order by it; they MUST NOT compare scores across strategies. */
+export const RetrieveResultSchema = z.object({
+  skill_id: z.string(),
+  score: z.number(),
+  name: z.string(),
+  description: z.string(),
+});
+export type RetrieveResult = z.infer<typeof RetrieveResultSchema>;

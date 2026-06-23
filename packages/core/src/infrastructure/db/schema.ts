@@ -42,21 +42,37 @@ const vector = customType<{ data: number[]; driverData: string }>({
   },
 });
 
+/** Postgres `tsvector` column type for full-text search (M4). */
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return 'tsvector';
+  },
+});
+
 /**
  * Skills — the registered capability. M1 adds the pointer to the current
  * revision and the soft-delete + id-reservation columns (ADR-3/ADR-5).
  */
-export const skills = pgTable('skills', {
-  skillId: text('skill_id').primaryKey(),
-  name: text('name').notNull(),
-  description: text('description').notNull(),
-  state: text('state').notNull().default('ACTIVE'),
-  latestRevisionId: text('latest_revision_id'),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  reservedUntil: timestamp('reserved_until', { withTimezone: true }),
-  createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
-  updateTime: timestamp('update_time', { withTimezone: true }).notNull().defaultNow(),
-});
+export const skills = pgTable(
+  'skills',
+  {
+    skillId: text('skill_id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull(),
+    state: text('state').notNull().default('ACTIVE'),
+    latestRevisionId: text('latest_revision_id'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    reservedUntil: timestamp('reserved_until', { withTimezone: true }),
+    // M4: denormalized lexical text (name + description + current SKILL.md body),
+    // maintained synchronously by skills-store on every write path.
+    searchText: text('search_text').notNull().default(''),
+    // M4: generated FTS vector over search_text; GIN-indexed for hybrid retrieve.
+    searchTsv: tsvector('search_tsv').generatedAlwaysAs(sql`to_tsvector('english', search_text)`),
+    createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
+    updateTime: timestamp('update_time', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('skills_search_tsv_gin').using('gin', t.searchTsv)],
+);
 
 /**
  * Skill revisions — immutable snapshots (ADR-3). Never UPDATEd. The zip payload

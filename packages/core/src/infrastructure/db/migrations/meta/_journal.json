@@ -36,6 +36,13 @@
       "when": 1782221311045,
       "tag": "0004_whole_wendell_vaughn",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782227669230,
+      "tag": "0005_thick_ikaris",
+      "breakpoints": true
     }
   ]
 }

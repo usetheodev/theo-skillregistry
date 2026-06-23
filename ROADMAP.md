@@ -149,7 +149,7 @@ conclusão além do polling — diferencial sobre o Google.
 
 ---
 
-### M3 — [ ] Embeddings plugáveis + indexação (pgvector)
+### M3 — [x] Embeddings plugáveis + indexação (pgvector)
 
 **Objective:** Gerar e indexar embeddings das skills para habilitar busca por intenção, com
 provider de embeddings plugável (DIP), como nos demais serviços Theo.

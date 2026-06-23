@@ -38,7 +38,23 @@ export {
   SkillSchema,
   type SkillInput,
   SkillInputSchema,
+  type WebhookEndpoint,
+  WebhookEndpointSchema,
+  type WebhookEndpointCreate,
+  WebhookEndpointCreateSchema,
+  type WebhookEndpointCreated,
+  WebhookEndpointCreatedSchema,
+  type WebhookEventType,
+  WebhookEventTypeSchema,
+  type WebhookPayload,
+  WebhookPayloadSchema,
 } from './contract/index.js';
+export { NonRetriableOperationError } from './domain/operation-errors.js';
+export {
+  type WebhookSender,
+  type WebhookSendRequest,
+  type WebhookSendResponse,
+} from './domain/webhook-sender.js';
 export {
   operations,
   type OperationRow,

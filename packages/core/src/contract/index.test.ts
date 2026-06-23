@@ -24,7 +24,7 @@ describe('SkillInputSchema', () => {
 
 describe('OperationSchema', () => {
   it('accepts the three M0 states', () => {
-    for (const state of ['CREATING', 'done', 'failed'] as const) {
+    for (const state of ['CREATING', 'UPDATING', 'DELETING', 'ACTIVE', 'FAILED'] as const) {
       const res = OperationSchema.safeParse({
         operation_id: 'op_1',
         skill_id: 'demo',

@@ -133,9 +133,9 @@ describeIntegration('skills + revisions stores (T3.2)', () => {
   // operations store (carried over from M0) still works
   it('operations store roundtrip and state transition', async () => {
     const ops = createOperationsStore(createDb(getPool()));
-    await ops.create({ operationId: 'op_1', skillId: 'demo', type: 'create_skill' });
+    await ops.create({ operationId: 'op_1', skillId: 'demo', type: 'create_skill', initialState: 'CREATING' });
     expect((await ops.get('op_1'))?.state).toBe('CREATING');
-    await ops.updateState('op_1', 'done');
-    expect((await ops.get('op_1'))?.state).toBe('done');
+    await ops.updateState('op_1', 'ACTIVE');
+    expect((await ops.get('op_1'))?.state).toBe('ACTIVE');
   });
 });

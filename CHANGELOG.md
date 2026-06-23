@@ -9,6 +9,8 @@ ao [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Roadmap amended: added M9 — Fechar todos os gaps do cross-validation (engenharia) (`/roadmap-feature close-all-gaps`)
+- M9: taxonomia semântica de test markers (`[slow]`/`[live]`/`[integration]`) por prefixo de nome + regex canônica de seleção (`vitest -t`), documentada em `rules/testing.md § 7` e fixada por teste; permite runs rápidos seletivos no CI sem plugin (#9)
+- M9: seleção de embedder vira um registry ordenado `{name, detect, create}` (OCP) — adicionar um provider é adicionar uma entrada, sem editar `selectEmbedder`; comportamento atual (openai/stub) preservado; 3º provider deferido por YAGNI (ADR-3) (#9)
 - M9: rastreabilidade ponta-a-ponta — um `trace_id` (W3C `traceparent`-compatível) é originado na fronteira HTTP (ou gerado quando ausente/malformado) e propagado por operação → job → webhook, logado em cada salto e persistido na delivery row (sobrevive ao re-enqueue do reconciler). Seam mínimo (`node:crypto`, sem SDK OpenTelemetry — o M8 adota e adiciona exporters) (#9)
 
 ### Changed

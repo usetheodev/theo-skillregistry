@@ -17,6 +17,7 @@ const newRev = (skillId: string, name = 'Demo') => ({
   payload: Buffer.from(`zip-${createId()}`),
   contentHash: 'hash-' + skillId,
   frontmatter: { name, description: 'desc' },
+  skillMd: `# ${name}\n\ndesc body`,
 });
 
 describeIntegration('skills + revisions stores (T3.2)', () => {
@@ -47,6 +48,7 @@ describeIntegration('skills + revisions stores (T3.2)', () => {
       payload: Buffer.from('zip2'),
       contentHash: 'hash2',
       frontmatter: { name: 'Demo', description: 'v2' },
+      skillMd: '# Demo\n\nv2 body',
     });
     expect(second).not.toBe(first);
     expect((await skills.getView('demo'))?.latest_revision_id).toBe(second);

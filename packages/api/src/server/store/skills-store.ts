@@ -23,12 +23,16 @@ export interface NewSkillRevision {
   readonly payload: Buffer;
   readonly contentHash: string;
   readonly frontmatter: Record<string, unknown>;
+  /** M3: SKILL.md markdown text — embedding source captured at ingest. */
+  readonly skillMd: string;
 }
 
 export interface RevisionPayload {
   readonly payload: Buffer;
   readonly contentHash: string;
   readonly frontmatter: Record<string, unknown>;
+  /** M3: SKILL.md markdown text — embedding source captured at ingest. */
+  readonly skillMd: string;
 }
 
 export interface ListPage {
@@ -124,6 +128,7 @@ export function createSkillsStore(db: Db): SkillsStore {
           payload: input.payload,
           contentHash: input.contentHash,
           frontmatter: input.frontmatter,
+          skillMd: input.skillMd,
         });
       });
     },
@@ -137,6 +142,7 @@ export function createSkillsStore(db: Db): SkillsStore {
           payload: rev.payload,
           contentHash: rev.contentHash,
           frontmatter: rev.frontmatter,
+          skillMd: rev.skillMd,
         });
         await tx
           .update(skills)

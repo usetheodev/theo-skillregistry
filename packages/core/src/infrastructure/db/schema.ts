@@ -11,10 +11,34 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
+// Single source of truth for the embedding dimension lives in the domain port;
+// infra MAY depend on domain (allowed direction). Avoids drift (DRY).
+import { EMBEDDING_DIM } from '../../domain/embedders/types.js';
+
 /** Postgres `bytea` column type (Drizzle has no native helper). */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType() {
     return 'bytea';
+  },
+});
+
+/** Embedding column dimension — derived from the domain contract (no drift). */
+export const EMBEDDING_COLUMN_DIM = EMBEDDING_DIM;
+
+/**
+ * Postgres `vector(1536)` column type (pgvector). Encodes `number[]` to the
+ * `[a,b,c]` literal on the way in and parses it back on the way out. Dimension
+ * is pinned (M3 ADR D2) — changing it requires a migration + ADR.
+ */
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return `vector(${EMBEDDING_COLUMN_DIM})`;
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(',')}]`;
+  },
+  fromDriver(raw: string): number[] {
+    return JSON.parse(raw) as number[];
   },
 });
 
@@ -47,9 +71,37 @@ export const skillRevisions = pgTable(
     payload: bytea('payload').notNull(),
     contentHash: text('content_hash').notNull(),
     frontmatter: jsonb('frontmatter').notNull(),
+    // M3: the SKILL.md markdown text captured at ingest — the embed worker reads
+    // it (with name + description) as the embedding source, avoiding a re-unzip.
+    skillMd: text('skill_md').notNull().default(''),
     createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('skill_revisions_skill_id_create_time_idx').on(t.skillId, desc(t.createTime))],
+);
+
+/**
+ * Embeddings — one dense vector per (revision, provider, model). M3. Generated
+ * asynchronously by the `embed_skill` worker; idempotent via the unique index +
+ * `ON CONFLICT DO NOTHING`. HNSW cosine index powers intent search (M4).
+ */
+export const embeddings = pgTable(
+  'embeddings',
+  {
+    id: text('id').primaryKey(),
+    revisionId: text('revision_id')
+      .notNull()
+      .references(() => skillRevisions.revisionId, { onDelete: 'cascade' }),
+    skillId: text('skill_id').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    dimensions: integer('dimensions').notNull(),
+    vector: vector('vector').notNull(),
+    createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('embeddings_revision_provider_model_uq').on(t.revisionId, t.provider, t.model),
+    index('embeddings_vector_hnsw').using('hnsw', t.vector.op('vector_cosine_ops')),
+  ],
 );
 
 /**
@@ -125,3 +177,4 @@ export type SkillRevisionRow = typeof skillRevisions.$inferSelect;
 export type OperationRow = typeof operations.$inferSelect;
 export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect;
 export type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
+export type EmbeddingRow = typeof embeddings.$inferSelect;

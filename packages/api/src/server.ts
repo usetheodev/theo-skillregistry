@@ -1,10 +1,23 @@
 import { serve } from '@hono/node-server';
+import { assertEmbeddingDim } from '@usetheo/skillregistry';
 
 import { createApp } from './server/app.js';
 import { createDb, createPool } from './server/db.js';
+import {
+  createEmbedEnqueuer,
+  createEmbedSkillHandler,
+  registerEmbedWorker,
+} from './server/embed/embed-worker.js';
 import { createJsonLogger } from './server/logger.js';
+import { selectEmbedder } from './server/providers/embedder-selection.js';
 import { setupGracefulDrain } from './server/queue/graceful-drain.js';
-import { createQueue, JOB_NAMES, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from './server/queue/queue.js';
+import {
+  createQueue,
+  EMBED_SKILL_DLQ_QUEUE_NAME,
+  JOB_NAMES,
+  WEBHOOK_DELIVERY_DLQ_QUEUE_NAME,
+} from './server/queue/queue.js';
+import { createEmbeddingsStore } from './server/store/embeddings-store.js';
 import { createWebhookEndpointsStore } from './server/store/webhook-endpoints-store.js';
 import {
   createWebhookDeliveryHandler,
@@ -15,7 +28,7 @@ import { createWebhookEnqueuer } from './server/webhooks/webhook-enqueuer.js';
 import { createWebhookReconciler, startWebhookReconciler } from './server/webhooks/webhook-reconciler.js';
 import { createHttpWebhookSender } from './server/webhooks/webhook-sender.js';
 import { buildWorkerHandlers } from './server/wiring.js';
-import { registerWorker } from './server/worker.js';
+import { composeTerminalHooks, registerWorker } from './server/worker.js';
 
 const SHUTDOWN_DEADLINE_MS = 30_000;
 const RECONCILER_INTERVAL_MS = 30_000;
@@ -40,17 +53,40 @@ async function main(): Promise<void> {
   await queue.createQueue(JOB_NAMES.DELETE_SKILL);
   await queue.createQueue(JOB_NAMES.WEBHOOK_DELIVERY);
   await queue.createQueue(WEBHOOK_DELIVERY_DLQ_QUEUE_NAME);
+  await queue.createQueue(JOB_NAMES.EMBED_SKILL);
+  await queue.createQueue(EMBED_SKILL_DLQ_QUEUE_NAME);
 
-  const endpointsStore = createWebhookEndpointsStore(createDb(pool));
+  const db = createDb(pool);
+  const endpointsStore = createWebhookEndpointsStore(db);
+  const embeddingsStore = createEmbeddingsStore(db);
 
-  // onTerminal fires the webhook fan-out when an operation completes.
-  const enqueuer = createWebhookEnqueuer({ endpointsStore, queue, logger });
-  const handlers = buildWorkerHandlers(pool, logger, enqueuer);
+  // Select the embedding provider. Probe the dimension at boot ONLY for the
+  // deterministic stub (free, instant). For network providers a live boot probe
+  // would couple HTTP-API liveness to the embeddings API and spend a call on every
+  // restart — the per-embedding guard in the embed worker enforces the dimension
+  // there instead (fail-fast without crashlooping the whole server).
+  const embedder = selectEmbedder();
+  if (embedder.provider === 'stub') {
+    assertEmbeddingDim(await embedder.embed('boot dimension probe'));
+  }
+  logger.info({ provider: embedder.provider, model: embedder.model }, 'embedder selected');
+
+  // onTerminal composes the webhook fan-out + the embed enqueue (ACTIVE only).
+  const webhookEnqueuer = createWebhookEnqueuer({ endpointsStore, queue, logger });
+  const embedEnqueuer = createEmbedEnqueuer({ queue, embeddingsStore, logger });
+  const handlers = buildWorkerHandlers(pool, logger, composeTerminalHooks(webhookEnqueuer, embedEnqueuer));
   await registerWorker({
     queue,
     createHandler: handlers.createHandler,
     updateHandler: handlers.updateHandler,
     deleteHandler: handlers.deleteHandler,
+  });
+
+  // Embed worker — generates + indexes the vector for the skill's current revision.
+  await registerEmbedWorker({
+    queue,
+    handler: createEmbedSkillHandler({ embeddingsStore, embedder, logger }),
+    logger,
   });
 
   // Webhook delivery worker + dead-letter consumer (SSRF-safe pinned egress).

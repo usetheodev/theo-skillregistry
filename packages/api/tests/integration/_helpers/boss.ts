@@ -1,6 +1,11 @@
 import type PgBoss from 'pg-boss';
 
-import { createQueue, JOB_NAMES, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from '../../../src/server/queue/queue.js';
+import {
+  createQueue,
+  EMBED_SKILL_DLQ_QUEUE_NAME,
+  JOB_NAMES,
+  WEBHOOK_DELIVERY_DLQ_QUEUE_NAME,
+} from '../../../src/server/queue/queue.js';
 
 import { PG_URI } from './env.js';
 
@@ -13,5 +18,7 @@ export async function startBoss(): Promise<PgBoss> {
   await boss.createQueue(JOB_NAMES.DELETE_SKILL);
   await boss.createQueue(JOB_NAMES.WEBHOOK_DELIVERY);
   await boss.createQueue(WEBHOOK_DELIVERY_DLQ_QUEUE_NAME);
+  await boss.createQueue(JOB_NAMES.EMBED_SKILL);
+  await boss.createQueue(EMBED_SKILL_DLQ_QUEUE_NAME);
   return boss;
 }

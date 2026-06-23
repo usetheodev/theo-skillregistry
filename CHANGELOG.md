@@ -9,8 +9,10 @@ ao [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Roadmap amended: added M9 — Fechar todos os gaps do cross-validation (engenharia) (`/roadmap-feature close-all-gaps`)
+- M9: rastreabilidade ponta-a-ponta — um `trace_id` (W3C `traceparent`-compatível) é originado na fronteira HTTP (ou gerado quando ausente/malformado) e propagado por operação → job → webhook, logado em cada salto e persistido na delivery row (sobrevive ao re-enqueue do reconciler). Seam mínimo (`node:crypto`, sem SDK OpenTelemetry — o M8 adota e adiciona exporters) (#9)
 
 ### Changed
+- Template de instalação (`.claude/settings.json`): `permissions.defaultMode` passa a `bypassPermissions` e `pnpm`/`npm`/`npx`/`pnpx`/`yarn`/`node`/`corepack` movidos de `ask` para `allow` (lista `ask` esvaziada) — Claude Code deixa de pedir confirmação por padrão; os `deny` destrutivos (rm -rf de paths de sistema, sudo, git checkout/reset --hard/push --force/rebase -i, leitura de `.env`/secrets) permanecem como guarda-corpo
 
 ### Deprecated
 

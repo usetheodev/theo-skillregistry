@@ -43,6 +43,13 @@
       "when": 1782227669230,
       "tag": "0005_thick_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782256608613,
+      "tag": "0006_secret_sinister_six",
+      "breakpoints": true
     }
   ]
 }

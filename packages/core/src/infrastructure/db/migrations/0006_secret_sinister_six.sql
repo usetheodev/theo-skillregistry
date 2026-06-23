@@ -1,0 +1,1 @@
+ALTER TABLE "webhook_deliveries" ADD COLUMN "trace_id" text DEFAULT '' NOT NULL;

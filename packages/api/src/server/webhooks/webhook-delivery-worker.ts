@@ -45,7 +45,7 @@ export function createWebhookDeliveryHandler(deps: WebhookDeliveryDeps): Webhook
     const endpoint = await deps.endpointsStore.getInternalById(data.endpoint_id);
     if (endpoint === undefined || !endpoint.active) {
       await deps.endpointsStore.markFailed(data.delivery_id);
-      deps.logger.error({ delivery_id: data.delivery_id }, 'webhook endpoint missing/inactive — failed');
+      deps.logger.error({ delivery_id: data.delivery_id, trace_id: data.trace_id }, 'webhook endpoint missing/inactive — failed');
       return;
     }
 
@@ -71,28 +71,28 @@ export function createWebhookDeliveryHandler(deps: WebhookDeliveryDeps): Webhook
       if (err instanceof UrlSafetyError) {
         await deps.endpointsStore.markFailed(data.delivery_id);
         deps.logger.error(
-          { delivery_id: data.delivery_id, reason: err.reason },
+          { delivery_id: data.delivery_id, trace_id: data.trace_id, reason: err.reason },
           'webhook target unsafe at delivery time — failed (non-retriable)',
         );
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      deps.logger.info({ delivery_id: data.delivery_id, err: message }, 'webhook send error (will retry)');
+      deps.logger.info({ delivery_id: data.delivery_id, trace_id: data.trace_id, err: message }, 'webhook send error (will retry)');
       throw err instanceof Error ? err : new Error(message);
     }
 
     if (status >= 200 && status < 300) {
       await deps.endpointsStore.markDelivered(data.delivery_id);
-      deps.logger.info({ delivery_id: data.delivery_id, status }, 'webhook delivered');
+      deps.logger.info({ delivery_id: data.delivery_id, trace_id: data.trace_id, status }, 'webhook delivered');
       return;
     }
     if (status >= 300 && status < 500) {
       await deps.endpointsStore.markFailed(data.delivery_id);
-      deps.logger.error({ delivery_id: data.delivery_id, status }, 'webhook non-retriable failure');
+      deps.logger.error({ delivery_id: data.delivery_id, trace_id: data.trace_id, status }, 'webhook non-retriable failure');
       return;
     }
     // 5xx — transient. Throw so pg-boss retries with backoff (and dead-letters after retryLimit).
-    deps.logger.info({ delivery_id: data.delivery_id, status }, 'webhook 5xx (will retry)');
+    deps.logger.info({ delivery_id: data.delivery_id, trace_id: data.trace_id, status }, 'webhook 5xx (will retry)');
     throw new Error(`webhook endpoint returned ${status}`);
   };
 }
@@ -101,7 +101,7 @@ export function createWebhookDeliveryHandler(deps: WebhookDeliveryDeps): Webhook
 export function createWebhookDlqHandler(deps: Pick<WebhookDeliveryDeps, 'endpointsStore' | 'logger'>): WebhookDeliveryHandler {
   return async (data) => {
     await deps.endpointsStore.markFailed(data.delivery_id);
-    deps.logger.error({ delivery_id: data.delivery_id }, 'webhook delivery dead-lettered (retries exhausted)');
+    deps.logger.error({ delivery_id: data.delivery_id, trace_id: data.trace_id }, 'webhook delivery dead-lettered (retries exhausted)');
   };
 }
 

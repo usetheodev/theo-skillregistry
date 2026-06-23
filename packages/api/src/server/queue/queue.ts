@@ -40,6 +40,8 @@ export function createQueue(uri: string): PgBoss {
 export interface CreateSkillJobData {
   readonly operation_id: string;
   readonly skill_id: string;
+  /** M9: correlation id propagated HTTP→operation→job→webhook. */
+  readonly trace_id: string;
   readonly name: string;
   readonly description: string;
   readonly content_hash: string;
@@ -52,6 +54,8 @@ export interface CreateSkillJobData {
 export interface UpdateSkillJobData {
   readonly operation_id: string;
   readonly skill_id: string;
+  /** M9: correlation id propagated HTTP→operation→job→webhook. */
+  readonly trace_id: string;
   readonly mask: readonly string[];
   readonly name?: string;
   readonly description?: string;
@@ -65,12 +69,16 @@ export interface UpdateSkillJobData {
 export interface DeleteSkillJobData {
   readonly operation_id: string;
   readonly skill_id: string;
+  /** M9: correlation id propagated HTTP→operation→job→webhook. */
+  readonly trace_id: string;
   readonly reserved_until: string;
 }
 
 export interface WebhookDeliveryJobData {
   readonly delivery_id: string;
   readonly endpoint_id: string;
+  /** M9: correlation id carried from the operation that triggered the delivery. */
+  readonly trace_id: string;
   readonly payload: Record<string, unknown>;
 }
 

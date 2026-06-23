@@ -17,7 +17,7 @@ describe('createEmbedEnqueuer (onTerminal → embed enqueue)', () => {
   it('enqueues embed_skill on ACTIVE skill.created with singletonKey=revisionId', async () => {
     const { queue, send, store } = deps(() => Promise.resolve(source('s1', 'rev_1')));
     const onTerminal = createEmbedEnqueuer({ queue, embeddingsStore: store, logger: createNoopLogger() });
-    await onTerminal({ operationId: 'op1', skillId: 's1', eventType: 'skill.created', state: 'ACTIVE' });
+    await onTerminal({ operationId: 'op1', skillId: 's1', traceId: 'tr-test', eventType: 'skill.created', state: 'ACTIVE' });
     expect(send).toHaveBeenCalledOnce();
     const [name, data, options] = send.mock.calls[0] as unknown as [string, { skill_id: string; revision_id: string }, { singletonKey: string; singletonSeconds: number }];
     expect(name).toBe(JOB_NAMES.EMBED_SKILL);
@@ -29,28 +29,28 @@ describe('createEmbedEnqueuer (onTerminal → embed enqueue)', () => {
   it('enqueues on ACTIVE skill.updated', async () => {
     const { queue, send, store } = deps(() => Promise.resolve(source('s2', 'rev_2')));
     const onTerminal = createEmbedEnqueuer({ queue, embeddingsStore: store, logger: createNoopLogger() });
-    await onTerminal({ operationId: 'op1', skillId: 's2', eventType: 'skill.updated', state: 'ACTIVE' });
+    await onTerminal({ operationId: 'op1', skillId: 's2', traceId: 'tr-test', eventType: 'skill.updated', state: 'ACTIVE' });
     expect(send).toHaveBeenCalledOnce();
   });
 
   it('does NOT enqueue on skill.deleted', async () => {
     const { queue, send, store } = deps(() => Promise.resolve(source('s3', 'rev_3')));
     const onTerminal = createEmbedEnqueuer({ queue, embeddingsStore: store, logger: createNoopLogger() });
-    await onTerminal({ operationId: 'op1', skillId: 's3', eventType: 'skill.deleted', state: 'ACTIVE' });
+    await onTerminal({ operationId: 'op1', skillId: 's3', traceId: 'tr-test', eventType: 'skill.deleted', state: 'ACTIVE' });
     expect(send).not.toHaveBeenCalled();
   });
 
   it('does NOT enqueue on a FAILED operation', async () => {
     const { queue, send, store } = deps(() => Promise.resolve(source('s4', 'rev_4')));
     const onTerminal = createEmbedEnqueuer({ queue, embeddingsStore: store, logger: createNoopLogger() });
-    await onTerminal({ operationId: 'op1', skillId: 's4', eventType: 'skill.created', state: 'FAILED' });
+    await onTerminal({ operationId: 'op1', skillId: 's4', traceId: 'tr-test', eventType: 'skill.created', state: 'FAILED' });
     expect(send).not.toHaveBeenCalled();
   });
 
   it('does NOT enqueue when the skill has no current revision', async () => {
     const { queue, send, store } = deps(() => Promise.resolve(undefined));
     const onTerminal = createEmbedEnqueuer({ queue, embeddingsStore: store, logger: createNoopLogger() });
-    await onTerminal({ operationId: 'op1', skillId: 'gone', eventType: 'skill.created', state: 'ACTIVE' });
+    await onTerminal({ operationId: 'op1', skillId: 'gone', traceId: 'tr-test', eventType: 'skill.created', state: 'ACTIVE' });
     expect(send).not.toHaveBeenCalled();
   });
 });

@@ -31,6 +31,8 @@ export interface NewDelivery {
   readonly endpointId: string;
   readonly eventType: string;
   readonly payload: unknown;
+  /** M9: correlation id carried from the triggering operation. */
+  readonly traceId: string;
 }
 
 /** Domain view of a delivery row (port boundary — no ORM type leaks out). */
@@ -39,6 +41,8 @@ export interface DeliveryRecord {
   readonly endpointId: string;
   readonly eventType: string;
   readonly payload: unknown;
+  /** M9: correlation id — survives the orphan-reconciler re-enqueue. */
+  readonly traceId: string;
   readonly attemptCount: number;
   readonly deliveredAt: Date | null;
   readonly failedAt: Date | null;
@@ -107,6 +111,7 @@ function toRecord(row: WebhookDeliveryRow): DeliveryRecord {
     endpointId: row.endpointId,
     eventType: row.eventType,
     payload: row.payload,
+    traceId: row.traceId,
     attemptCount: row.attemptCount,
     deliveredAt: row.deliveredAt,
     failedAt: row.failedAt,
@@ -174,6 +179,7 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
         endpointId: input.endpointId,
         eventType: input.eventType,
         payload: input.payload,
+        traceId: input.traceId,
       });
     },
 
@@ -220,8 +226,9 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
         FROM claimed
         WHERE d.id = claimed.id
         RETURNING d.id, d.endpoint_id AS "endpointId", d.event_type AS "eventType",
-                  d.payload, d.attempt_count AS "attemptCount", d.delivered_at AS "deliveredAt",
-                  d.failed_at AS "failedAt", d.enqueued_at AS "enqueuedAt", d.create_time AS "createTime"
+                  d.payload, d.trace_id AS "traceId", d.attempt_count AS "attemptCount",
+                  d.delivered_at AS "deliveredAt", d.failed_at AS "failedAt",
+                  d.enqueued_at AS "enqueuedAt", d.create_time AS "createTime"
       `);
       return (result.rows as unknown as WebhookDeliveryRow[]).map(toRecord);
     },

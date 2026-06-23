@@ -175,6 +175,9 @@ export const webhookDeliveries = pgTable(
       .references(() => webhookEndpoints.id, { onDelete: 'cascade' }),
     eventType: text('event_type').notNull(),
     payload: jsonb('payload').notNull(),
+    // M9: correlation id propagated end-to-end (HTTP→operation→job→webhook). Persisted
+    // so the orphan-reconciler re-enqueue preserves it (EC-1).
+    traceId: text('trace_id').notNull().default(''),
     attemptCount: integer('attempt_count').notNull().default(0),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
     failedAt: timestamp('failed_at', { withTimezone: true }),

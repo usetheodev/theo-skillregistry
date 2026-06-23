@@ -12,6 +12,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type PgBoss from 'pg-boss';
 
 import { type Logger } from '../logger.js';
+import { resolveTraceId } from '../observability/trace-context.js';
 import { JOB_NAMES, SKILL_SEND_OPTIONS } from '../queue/queue.js';
 import { type OperationsStore } from '../store/operations-store.js';
 import { type RevisionsStore } from '../store/revisions-store.js';
@@ -110,6 +111,7 @@ async function enqueueOperation(
     metric: Readonly<Record<string, unknown>>;
   },
 ): Promise<Response> {
+  const traceId = resolveTraceId(c.req.header('traceparent'));
   const newId = `op_${createId()}`;
   const { operationId, created } = await deps.operationsStore.create({
     operationId: newId,
@@ -125,7 +127,7 @@ async function enqueueOperation(
   try {
     await deps.queue.send(
       args.jobName,
-      { operation_id: operationId, skill_id: args.skillId, ...args.jobData },
+      { operation_id: operationId, skill_id: args.skillId, trace_id: traceId, ...args.jobData },
       SKILL_SEND_OPTIONS,
     );
   } catch (err) {
@@ -133,7 +135,7 @@ async function enqueueOperation(
     throw err;
   }
   deps.logger.info(
-    { operation_id: operationId, skill_id: args.skillId, job: args.jobName, ...args.metric },
+    { operation_id: operationId, skill_id: args.skillId, trace_id: traceId, job: args.jobName, ...args.metric },
     `${args.jobName} enqueued`,
   );
   return c.json({ operation_id: operationId, skill_id: args.skillId }, 202);

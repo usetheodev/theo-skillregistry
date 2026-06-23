@@ -8,6 +8,7 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Roadmap amended: added M9 — Fechar todos os gaps do cross-validation (engenharia) (`/roadmap-feature close-all-gaps`)
 
 ### Changed
 
@@ -16,6 +17,7 @@ ao [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- `/discover-plan-confidence`: threshold parser read the wrong delimiter (`|`) so every discovery plan scored `INVALID` regardless of quality; now reads the documented `KEY = VALUE` band format (ADR 0001) (#8)
 
 ### Security
 

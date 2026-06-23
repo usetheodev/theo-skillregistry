@@ -129,7 +129,7 @@ nativo do Theokit** e validação de payload rígida, mais o CRUD completo com r
 
 ---
 
-### M2 — [ ] LRO robusto + governança + webhook
+### M2 — [x] LRO robusto + governança + webhook
 
 **Objective:** Tornar as operações de longa duração confiáveis e observáveis, com webhook de
 conclusão além do polling — diferencial sobre o Google.

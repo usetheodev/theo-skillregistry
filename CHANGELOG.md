@@ -8,6 +8,20 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.3.0] - 2026-06-23
+
+### Added
 - M2: ciclo de vida explícito de operações LRO (`CREATING`/`UPDATING`/`DELETING` →
   `ACTIVE`/`FAILED`) com idempotência via header `Idempotency-Key` e classificação de
   retry (regra de negócio = sem retry → `FAILED`; transiente = retry com backoff) (#5)
@@ -22,16 +36,6 @@ ao [Semantic Versioning](https://semver.org/).
   worker de entrega com classificação de retry (2xx=entregue / 3xx-4xx=falha permanente /
   5xx=retry com backoff → dead-letter), reconciler de órfãos via `FOR UPDATE SKIP LOCKED`
   e dedup por `singletonKey` (entrega at-least-once com idempotência terminal) (#5)
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [0.2.0] - 2026-06-23
 

@@ -2,7 +2,7 @@
 generated_by: roadmap-init
 generated_on: 2026-06-22
 slug: skill-registry
-peer_count_cloned: 7
+peer_count_cloned: 8
 peer_count_skipped: 0
 note: >
   This catalog lives at knowledge-base/references-catalog.md (sibling of references/)
@@ -269,6 +269,43 @@ git clone --depth 1 --filter=blob:none https://github.com/agentic-community/mcp-
 
 > Note: `pgvector/pgvector` foi deliberadamente NÃO clonado — já é dependência direta da
 > stack (Postgres + pgvector), não material de estudo (YAGNI).
+
+---
+
+## agentic-context-engine
+
+- **Folder:** `knowledge-base/references/agentic-context-engine/`
+- **Lifecycle:** cloned
+- **Repo:** https://github.com/kayba-ai/agentic-context-engine
+- **License:** Apache-2.0
+- **License-gate decision:** clone-anyway-study-only
+- **Last commit:** 2026-06 (shallow clone)
+- **Added by:** `/discover-plan theokit-registry-contract` (2026-06-23)
+
+### Why this peer is here
+
+ACE (Stanford/SambaNova paper + Dynamic Cheatsheet) is the primary prior art for the
+Agent/Reflector/SkillManager learning loop + persistent Skillbook. It is the citable source for
+the `theokit-registry-contract` blueprint: how a learned-strategy store models curation
+(`UpdateBatch` ADD/UPDATE/TAG/REMOVE, soft-delete via `active`) and where the registry/runtime
+boundary falls (`ask`/`learn.*` fenced behind `safe_mode`).
+
+### What to study in it
+
+- `ace/core/skillbook.py` — `Skill` dataclass, `UpdateOperation`/`UpdateBatch`, `apply_update` (atomic batch).
+- `ace/integrations/mcp/{handlers,models,adapters}.py` — the 6 MCP verbs split store vs runtime.
+- `tests/test_ace_core.py` + `tests/test_ace_mcp_handlers.py` — curation invariants to mirror.
+
+### Supports ROADMAP milestone(s)
+
+- M7 — *because:* the registry↔Theokit contract (RemoteSkillsManager) is derived from ACE's loop.
+- M9 — *because:* observability/feedback gaps reference ACE patterns.
+
+### Clone command used
+
+```bash
+git clone --depth 1 --filter=blob:none https://github.com/kayba-ai/agentic-context-engine knowledge-base/references/agentic-context-engine/
+```
 
 ---
 

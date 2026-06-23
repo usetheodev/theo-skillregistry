@@ -17,6 +17,22 @@ export {
   type OpenAIEmbeddingsClient,
 } from './domain/embedders/index.js';
 export {
+  type RetrieveParams,
+  type RetrievedSkill,
+  type SkillRetriever,
+  type QueryExecutor,
+  RetrieverError,
+  ParamBuilder,
+  createVectorRetriever,
+  type VectorRetrieverDeps,
+  createKeywordRetriever,
+  type KeywordRetrieverDeps,
+  createHybridRetriever,
+  type HybridRetrieverDeps,
+  rrfFuse,
+  RRF_K,
+} from './domain/retrievers/index.js';
+export {
   type FrontmatterErrorCode,
   parseFrontmatter,
   type SkillFrontmatter,

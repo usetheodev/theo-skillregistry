@@ -11,6 +11,9 @@ ao [Semantic Versioning](https://semver.org/).
 - M4: índice de busca lexical — coluna `skills.search_text` (name + description + corpo SKILL.md
   corrente, mantida sincronamente nas 3 vias de escrita) + coluna gerada `search_tsv` (tsvector
   `english`) com índice GIN para Full-Text Search do Postgres (#7)
+- M4: porta `SkillRetriever` (DIP) com adapters vector (cosine pgvector da revisão corrente, guard
+  de dimensão), keyword (FTS `websearch_to_tsquery` + `ts_rank`) e hybrid (fusão RRF k=60
+  calibration-free, degradação graciosa); `ParamBuilder` para binding `$N` seguro (#7)
 
 ### Changed
 

@@ -48,6 +48,10 @@ export function createHttpWebhookSender(opts: CreateHttpWebhookSenderOptions = {
   return {
     async send(req: WebhookSendRequest): Promise<WebhookSendResponse> {
       const { url, addresses } = await resolveSafeAddresses(req.url, opts.resolver, policy);
+      // Pin to the first validated address. All addresses passed the policy, so any
+      // is safe; we do not fail over across them (single-A is the common case —
+      // multi-address happy-eyeballs failover is a deferred availability optimization,
+      // not a correctness/security concern). A dead peer surfaces as a transient retry.
       const pinned = addresses[0];
       if (pinned === undefined) {
         throw new Error('no resolved address');

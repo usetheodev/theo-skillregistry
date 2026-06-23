@@ -67,6 +67,8 @@ describe('createHttpWebhookSender (SSRF-safe pinned egress)', () => {
     expect(captured.url).toBe('/in');
     expect(captured.body).toBe('{"a":1}');
     expect(captured.headers['webhook-signature']).toBe('t=1&s=ff');
+    // Host header MUST be the hostname (vhost/TLS identity), never the pinned IP.
+    expect(captured.headers['host']).toBe(`hooks.test:${port}`);
   });
 
   it('returns a 3xx/4xx/5xx status verbatim (does not follow redirects)', async () => {

@@ -8,6 +8,20 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.5.0] - 2026-06-23
+
+### Added
 - M4: índice de busca lexical — coluna `skills.search_text` (name + description + corpo SKILL.md
   corrente, mantida sincronamente nas 3 vias de escrita) + coluna gerada `search_tsv` (tsvector
   `english`) com índice GIN para Full-Text Search do Postgres (#7)
@@ -21,16 +35,6 @@ ao [Semantic Versioning](https://semver.org/).
 - M4: conjunto de avaliação interno versionado (`eval/dataset.json` + `eval/run-recall.ts`) —
   **Recall@5 ≥ 0.85** e retrieve **p95 < 200ms** medidos e reproduzíveis em teste de integração
   (recall via componente FTS lexical com stub embedder; OpenAI adiciona recall semântico) (#7)
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [0.4.0] - 2026-06-23
 

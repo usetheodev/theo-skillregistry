@@ -61,4 +61,15 @@ describeIntegration('M4 FTS schema + search_text maintenance (T1.1/T1.2)', () =>
     await store.addRevision('s3', { payload: Buffer.from('z2'), contentHash: 'h2', frontmatter: {}, skillMd: '# new body v2' });
     expect(await searchTextOf('s3')).toBe('Gamma desc # new body v2');
   });
+
+  it('recycling a tombstoned id rebuilds search_text with the NEW content (no stale tokens)', async () => {
+    const store = createSkillsStore(createDb(getPool()));
+    await store.createWithRevision(newRev('recyc', 'oldname', 'old description', '# unique-old-token'));
+    // soft-delete with an already-expired reservation so the id is immediately recyclable
+    await getPool().query(`UPDATE skills SET deleted_at = now(), reserved_until = now() - interval '1 hour' WHERE skill_id = 'recyc'`);
+    await store.createWithRevision(newRev('recyc', 'newname', 'new description', '# fresh-new-token'));
+    const txt = await searchTextOf('recyc');
+    expect(txt).toBe('newname new description # fresh-new-token');
+    expect(txt).not.toContain('unique-old-token'); // no contamination from the purged skill
+  });
 });

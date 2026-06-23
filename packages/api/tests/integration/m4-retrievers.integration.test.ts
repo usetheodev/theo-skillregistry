@@ -1,5 +1,5 @@
 import { createId } from '@paralleldrive/cuid2';
-import { createKeywordRetriever, createStubEmbedder, createVectorRetriever, stubEmbed } from '@usetheo/skillregistry';
+import { createKeywordRetriever, createStubEmbedder, createVectorRetriever, RetrieverError, stubEmbed } from '@usetheo/skillregistry';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 
 import { createPgExecutor } from '../../src/server/retrieve/pg-executor.js';
@@ -69,5 +69,32 @@ describeIntegration('M4 vector + keyword retrievers (T2.2/T2.3)', () => {
     const r = createVectorRetriever({ executor: executor(), embedder: createStubEmbedder() });
     const out = await r.retrieve({ query: 'anything', topK: 5 });
     expect(out.map((x) => x.skill_id)).not.toContain('vr-del');
+  });
+
+  it('keyword retriever matches on ANY overlapping term (OR semantics, not AND)', async () => {
+    await seed('kw-or', 'Widget', 'does things', 'alpha beta gamma');
+    const r = createKeywordRetriever({ executor: executor() });
+    // query shares only "alpha" with the skill; the other term has no match — AND would miss it.
+    const out = await r.retrieve({ query: 'alpha zzznomatchword', topK: 5 });
+    expect(out.map((x) => x.skill_id)).toContain('kw-or');
+  });
+
+  it('keyword retriever returns [] for an all-stopword query (empty tsquery, no throw)', async () => {
+    await seed('kw-stop', 'Thing', 'does stuff', 'alpha beta');
+    const r = createKeywordRetriever({ executor: executor() });
+    await expect(r.retrieve({ query: 'the a of an', topK: 5 })).resolves.toEqual([]);
+  });
+
+  it('vector retriever throws (typed) on a dimension mismatch, before any SQL', async () => {
+    await seed('vr-dim', 'Dim', 'dim test', 'body');
+    const wrongDim = createStubEmbedder({ dimensions: 768 });
+    const r = createVectorRetriever({ executor: executor(), embedder: wrongDim });
+    await expect(r.retrieve({ query: 'x', topK: 5 })).rejects.toThrow(/dimension/i);
+  });
+
+  it('wraps an executor failure in RetrieverError (no raw pg error leak)', async () => {
+    const boom = { query: () => Promise.reject(new Error('connection reset; SQL: SELECT secret')) };
+    const r = createKeywordRetriever({ executor: boom });
+    await expect(r.retrieve({ query: 'x', topK: 5 })).rejects.toBeInstanceOf(RetrieverError);
   });
 });

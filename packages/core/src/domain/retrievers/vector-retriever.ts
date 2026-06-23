@@ -1,5 +1,6 @@
 import { assertEmbeddingDim, type EmbeddingProvider } from '../embedders/index.js';
 
+import { runRetrieveQuery } from './map-row.js';
 import { ParamBuilder } from './param-builder.js';
 import { type QueryExecutor, type RetrievedSkill, type RetrieveParams, type SkillRetriever } from './types.js';
 
@@ -29,11 +30,7 @@ export function createVectorRetriever(deps: VectorRetrieverDeps): SkillRetriever
         ORDER BY e.vector <=> ${vecPh}::vector ASC, s.skill_id ASC
         LIMIT ${limitPh}
       `;
-      const rows = await deps.executor.query<{ skill_id: string; name: string; description: string; score: number }>(
-        sql,
-        b.getParams(),
-      );
-      return rows.map((r) => ({ skill_id: r.skill_id, name: r.name, description: r.description, score: Number(r.score) }));
+      return runRetrieveQuery(deps.executor, sql, b.getParams());
     },
   };
 }

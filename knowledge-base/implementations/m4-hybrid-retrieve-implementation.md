@@ -57,3 +57,27 @@ integração 70). Plan-confidence SHIPPABLE (100). ZERO dependências novas.
 - **Eval honesto** (ADR D3): medido com stub embedder; recall pelo FTS lexical; OpenAI adiciona
   semântico em produção. `name` do frontmatter é slug (`^[a-z0-9-]+$`); recall vem de description+body+slug.
 - ZERO deps novas — FTS nativo do Postgres + pgvector (M3) + fusão RRF (~30 linhas) (Rule 9).
+
+## "Fusão/rerank" do DoD — esclarecimento honesto (Rule 3)
+
+O DoD do M4 diz "fusão/rerank". Entregamos **RRF**, que FUNDE as duas listas E **reordena** o
+conjunto fundido por `Σ 1/(k+rank)` (fusão + reranking em um passo, calibration-free). Um reranker
+dedicado de 2º estágio (cross-encoder) NÃO foi implementado — é deferido (YAGNI): o eval atinge
+Recall@5 ≥ 0.85 sem ele, e um cross-encoder traria dep pesada + latência. Documentado como decisão
+consciente, não omissão. Se um caso futuro exigir, entra como follow-up via ADR.
+
+## Pós-review (hardening — 4 agentes especialistas, 0 BLOCKERs)
+
+- **Pool de fusão profundo** (F-dom-3): `FUSION_POOL=50` desacopla o candidato-pool do topK — uma
+  skill mid-rank em ambas as listas pode fundir alto (fecha a limitação RRF-com-truncamento).
+- **Degradação graciosa de ambos os lados** (F-xval-5): hybrid faz `.catch` no vector E no keyword —
+  embedder fora do ar → keyword-only; FTS fora → vector-only. Single-strategy NÃO mascara erro.
+- **`RetrieverError` wired** (F-xval-3): `runRetrieveQuery` encapsula falhas do executor (não vaza
+  erro pg/SQL); também resolve o DRY do mapeamento de linhas (F-arch-7).
+- **CHANGELOG corrigido** (F-xval-1): descreve a query OR-lexema real (não `websearch_to_tsquery`).
+- **Eval honesto** (F-test-1/2/3): gate é `Recall@5 ≥ 0.85` (DoD, sem `toEqual([])` decorativo);
+  teste de **vector-only recall < 0.5** torna VISÍVEL que a perna vetorial é inerte sob stub (FTS
+  carrega o recall); caveat de escala do p95 documentado.
+- **Testes adicionados**: OR-recall (1 termo), all-stopword→[], dim-guard lança, executor-error→
+  RetrieverError, tombstone-recycle search_text, scores exatos na degradação, order-independence,
+  empty-input RRF. Total 172 testes.

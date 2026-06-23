@@ -5,6 +5,9 @@ import { type RetrievedSkill, type SkillRetriever } from './types.js';
 
 const sk = (id: string): RetrievedSkill => ({ skill_id: id, score: 0, name: id, description: '' });
 const listRetriever = (list: RetrievedSkill[]): SkillRetriever => ({ retrieve: () => Promise.resolve(list) });
+const delayed = (list: RetrievedSkill[], ms: number): SkillRetriever => ({
+  retrieve: () => new Promise((r) => setTimeout(() => r(list), ms)),
+});
 
 describe('rrfFuse (Reciprocal Rank Fusion, k=60)', () => {
   it('scores a single-list skill as 1/(k+rank)', () => {
@@ -27,6 +30,10 @@ describe('rrfFuse (Reciprocal Rank Fusion, k=60)', () => {
     expect(out.map((r) => r.skill_id)).toEqual(['b', 'a']); // b is in both → highest
     expect(out).toHaveLength(2);
   });
+
+  it('returns [] for two empty lists', () => {
+    expect(rrfFuse([], [], 5)).toEqual([]);
+  });
 });
 
 describe('createHybridRetriever', () => {
@@ -36,10 +43,27 @@ describe('createHybridRetriever', () => {
     expect(out.map((x) => x.skill_id).sort()).toEqual(['a', 'b']);
   });
 
-  it('Concurrent test: degrades gracefully when the keyword retriever fails (parallel)', async () => {
+  it('degrades to vector-only with correct RRF scores when keyword fails', async () => {
     const failing: SkillRetriever = { retrieve: () => Promise.reject(new Error('no FTS')) };
     const r = createHybridRetriever({ vector: listRetriever([sk('a'), sk('b')]), keyword: failing });
     const out = await r.retrieve({ query: 'q', topK: 10 });
-    expect(out.map((x) => x.skill_id)).toEqual(['a', 'b']); // vector-only, no throw
+    expect(out[0]).toMatchObject({ skill_id: 'a', score: 1 / (RRF_K + 0) }); // exact score, not zeroed
+    expect(out[1]).toMatchObject({ skill_id: 'b', score: 1 / (RRF_K + 1) });
+  });
+
+  it('degrades to keyword-only when the vector side fails (embedder down)', async () => {
+    const failing: SkillRetriever = { retrieve: () => Promise.reject(new Error('embedder down')) };
+    const r = createHybridRetriever({ vector: failing, keyword: listRetriever([sk('k')]) });
+    const out = await r.retrieve({ query: 'q', topK: 10 });
+    expect(out.map((x) => x.skill_id)).toEqual(['k']); // keyword-only, no throw
+  });
+
+  it('Concurrent test: fusion is order-independent regardless of which retriever resolves first', async () => {
+    const slowVectorFastKeyword = createHybridRetriever({ vector: delayed([sk('a'), sk('b')], 20), keyword: delayed([sk('b')], 1) });
+    const fastVectorSlowKeyword = createHybridRetriever({ vector: delayed([sk('a'), sk('b')], 1), keyword: delayed([sk('b')], 20) });
+    const out1 = await slowVectorFastKeyword.retrieve({ query: 'q', topK: 10 });
+    const out2 = await fastVectorSlowKeyword.retrieve({ query: 'q', topK: 10 });
+    expect(out1).toEqual(out2); // deterministic — 'b' (both lists) first regardless of timing
+    expect(out1[0]?.skill_id).toBe('b');
   });
 });

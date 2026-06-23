@@ -64,13 +64,14 @@ function percentile(sorted: number[], p: number): number {
 export async function runRecallEval(
   retriever: DispatchingRetriever,
   dataset: EvalDataset,
+  strategy: 'vector' | 'keyword' | 'hybrid' = 'hybrid',
 ): Promise<EvalReport> {
   let hits = 0;
   const latencies: number[] = [];
   const misses: string[] = [];
   for (const c of dataset.cases) {
     const start = performance.now();
-    const results = await retriever.retrieve({ query: c.query, topK: 5, strategy: 'hybrid' });
+    const results = await retriever.retrieve({ query: c.query, topK: 5, strategy });
     latencies.push(performance.now() - start);
     const top5 = results.slice(0, 5).map((r) => r.skill_id);
     if (top5.includes(c.expected)) {

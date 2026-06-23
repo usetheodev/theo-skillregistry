@@ -31,6 +31,7 @@ export {
   type HybridRetrieverDeps,
   rrfFuse,
   RRF_K,
+  FUSION_POOL,
 } from './domain/retrievers/index.js';
 export {
   type FrontmatterErrorCode,

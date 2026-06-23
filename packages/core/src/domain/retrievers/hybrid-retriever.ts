@@ -3,6 +3,14 @@ import { type RetrievedSkill, type RetrieveParams, type SkillRetriever } from '.
 /** Reciprocal Rank Fusion constant (standard k=60; calibration-free — no weights). */
 export const RRF_K = 60;
 
+/**
+ * Candidate pool fetched from EACH sub-retriever before fusion. Decoupled from
+ * (and ≥) the final topK so a skill ranked mid-list in BOTH lexical + vector lists
+ * can still fuse high — the classic RRF-with-truncation pitfall. We fuse over the
+ * deeper pool, then slice to topK.
+ */
+export const FUSION_POOL = 50;
+
 export interface HybridRetrieverDeps {
   readonly vector: SkillRetriever;
   readonly keyword: SkillRetriever;
@@ -41,16 +49,20 @@ export function rrfFuse(
 }
 
 /**
- * Hybrid retriever — runs vector + keyword in PARALLEL and fuses via RRF. The
- * keyword side degrades gracefully (its failure yields an empty list rather than
- * failing the whole retrieve), so a missing FTS index never breaks hybrid.
+ * Hybrid retriever — runs vector + keyword in PARALLEL over a deep candidate pool
+ * and fuses via RRF. EITHER side degrades gracefully: a failure on the vector side
+ * (e.g. embedder timeout) or the keyword side (e.g. missing FTS) yields an empty
+ * list rather than failing the whole retrieve, so hybrid still answers from the
+ * surviving retriever. (Single-strategy retrieve does NOT swallow errors — only
+ * the fused hybrid path is resilient by design.)
  */
 export function createHybridRetriever(deps: HybridRetrieverDeps): SkillRetriever {
   return {
     async retrieve(params: RetrieveParams): Promise<RetrievedSkill[]> {
+      const poolParams: RetrieveParams = { query: params.query, topK: Math.max(params.topK, FUSION_POOL) };
       const [vectorResults, keywordResults] = await Promise.all([
-        deps.vector.retrieve(params),
-        deps.keyword.retrieve(params).catch((): RetrievedSkill[] => []),
+        deps.vector.retrieve(poolParams).catch((): RetrievedSkill[] => []),
+        deps.keyword.retrieve(poolParams).catch((): RetrievedSkill[] => []),
       ]);
       return rrfFuse(vectorResults, keywordResults, params.topK);
     },

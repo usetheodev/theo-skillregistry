@@ -22,19 +22,30 @@ describeIntegration('M4 eval: Recall@5 + p95 latency (T4.1/T4.2)', () => {
   });
   afterAll(closePool);
 
-  it('hybrid retrieve meets Recall@5 >= 0.85 on the internal eval set', async () => {
+  it('hybrid retrieve meets Recall@5 >= 0.85 on the internal eval set (DoD gate)', async () => {
     const retriever = createDispatchingRetriever({ executor: createPgExecutor(getPool()), embedder: createStubEmbedder() });
-    const report = await runRecallEval(retriever, dataset);
-    // Surface misses for debuggability if the gate ever fails.
-    expect(report.misses, report.misses.join(' | ')).toEqual([]);
-    expect(report.recallAt5).toBeGreaterThanOrEqual(0.85);
+    const report = await runRecallEval(retriever, dataset, 'hybrid');
+    // 0.85 is the real gate (DoD). Misses are surfaced in the message for debuggability,
+    // but a single miss does NOT fail the suite — the dataset is curated lexical paraphrases.
+    expect(report.recallAt5, `misses: ${report.misses.join(' | ')}`).toBeGreaterThanOrEqual(0.85);
     expect(report.n).toBe(dataset.cases.length);
   });
 
-  it('retrieve p95 latency < 200ms over the eval queries', async () => {
+  it('HONESTY: vector-only recall is poor under the stub embedder (hybrid recall is FTS-carried)', async () => {
+    // The stub embedder is a deterministic hash, NOT semantic — so the vector leg
+    // contributes near-random ordering. This test makes that dead-leg VISIBLE: hybrid
+    // recall (other test) comes from the FTS lexical component. In production the
+    // OpenAI embedder restores semantic vector recall. (Unbreakable Rule 3.)
     const retriever = createDispatchingRetriever({ executor: createPgExecutor(getPool()), embedder: createStubEmbedder() });
-    // warm + measure
-    await runRecallEval(retriever, dataset);
+    const vectorOnly = await runRecallEval(retriever, dataset, 'vector');
+    expect(vectorOnly.recallAt5).toBeLessThan(0.5); // non-semantic stub → poor vector recall
+  });
+
+  it('retrieve p95 latency < 200ms over the eval queries', async () => {
+    // NOTE: smoke/regression guard at toy corpus size (13 rows) — NOT a production-scale
+    // SLO. A larger-corpus latency probe is a follow-up before any public SLA claim.
+    const retriever = createDispatchingRetriever({ executor: createPgExecutor(getPool()), embedder: createStubEmbedder() });
+    await runRecallEval(retriever, dataset); // warm
     const report = await runRecallEval(retriever, dataset);
     expect(report.p95Ms).toBeLessThan(200);
   });

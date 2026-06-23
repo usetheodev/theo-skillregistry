@@ -1,0 +1,80 @@
+import { createSecretlintScanner, createYauzlPayloadValidator } from '@usetheo/skillregistry-api/validators';
+import { describe, expect, it, vi } from 'vitest';
+import yazl from 'yazl';
+
+import { type ParsedCli } from '../../src/args.js';
+import { runPublish } from '../../src/commands/publish.js';
+
+const validation = { payloadValidator: createYauzlPayloadValidator(), secretScanner: createSecretlintScanner() };
+
+function zip(content: string): Promise<Buffer> {
+  return new Promise((resolve) => {
+    const z = new yazl.ZipFile();
+    z.addBuffer(Buffer.from(content, 'utf8'), 'SKILL.md');
+    z.end();
+    const chunks: Buffer[] = [];
+    z.outputStream.on('data', (c: Buffer) => chunks.push(c));
+    z.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+const valid = () => zip(`---\nname: my-skill\ndescription: a useful skill\n---\n# my-skill\n`);
+const args = (): ParsedCli => ({ command: 'publish', path: 'skill', registry: 'http://reg.test/', skillId: 'my-skill' });
+const capture = () => {
+  const lines: string[] = [];
+  return { out: (l: string) => lines.push(l), lines };
+};
+const jsonRes = (status: number, body: unknown) =>
+  ({ status, json: () => Promise.resolve(body) }) as unknown as Response;
+
+describe('runPublish', () => {
+  it('POSTs a new skill (GET 404 → POST 202) and prints the operation id', async () => {
+    const buf = await valid();
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === undefined || init.method === 'GET') return Promise.resolve(jsonRes(404, {}));
+      return Promise.resolve(jsonRes(202, { operation_id: 'op_123' }));
+    }) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(0);
+    expect(lines.join('\n')).toMatch(/published.*created.*op_123/);
+  });
+
+  it('PATCHes an existing skill (GET 200 → PATCH 202)', async () => {
+    const buf = await valid();
+    const calls: string[] = [];
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (init?.method === undefined || init.method === 'GET') return Promise.resolve(jsonRes(200, { skill_id: 'my-skill' }));
+      return Promise.resolve(jsonRes(202, { operation_id: 'op_456' }));
+    }) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(0);
+    expect(lines.join('\n')).toMatch(/updated.*op_456/);
+    expect(calls.some((c) => c.startsWith('PATCH'))).toBe(true);
+  });
+
+  it('does NOT publish an invalid skill (returns 1, no POST)', async () => {
+    const buf = await zip(`---\nname: Invalid Name\ndescription: x\n---\n# x\n`);
+    const fetch = vi.fn(() => Promise.resolve(jsonRes(202, {}))) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(1);
+    expect(lines.join('\n')).toContain('[schema_invalid]');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns 2 with a clear message when the registry is unreachable', async () => {
+    const buf = await valid();
+    const fetch = vi.fn(() => Promise.reject(new Error('ECONNREFUSED'))) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(2);
+    expect(lines.join('\n')).toMatch(/could not reach the registry/);
+  });
+
+  it('returns 2 when required flags are missing', async () => {
+    const { out } = capture();
+    expect(await runPublish({ command: 'publish', path: 'skill' }, { validation, out, fetch: globalThis.fetch })).toBe(2);
+  });
+});

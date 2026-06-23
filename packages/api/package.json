@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./validators": "./src/validators.ts",
-    "./app": "./src/server/app.ts"
+    "./app": "./src/server/app.ts",
+    "./testkit": "./src/testkit.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

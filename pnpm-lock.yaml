@@ -94,6 +94,31 @@ importers:
         specifier: ^3.3.1
         version: 3.3.1
 
+  packages/cli:
+    dependencies:
+      '@usetheo/skillregistry':
+        specifier: workspace:*
+        version: link:../core
+      '@usetheo/skillregistry-api':
+        specifier: workspace:*
+        version: link:../api
+      yazl:
+        specifier: ^3.3.1
+        version: 3.3.1
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.43
+      '@types/yazl':
+        specifier: ^2.4.5
+        version: 2.4.6
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.9(@types/node@20.19.43)(vite@8.0.16(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
   packages/core:
     dependencies:
       '@paralleldrive/cuid2':

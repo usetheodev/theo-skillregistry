@@ -8,6 +8,13 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- M2: ciclo de vida explícito de operações LRO (`CREATING`/`UPDATING`/`DELETING` →
+  `ACTIVE`/`FAILED`) com idempotência via header `Idempotency-Key` e classificação de
+  retry (regra de negócio = sem retry → `FAILED`; transiente = retry com backoff) (#5)
+- M2: primitivos de segurança de webhook — SSRF guard (`assertPublicUrl`: bloqueia
+  schemes não-http(s), IPs privados/loopback/link-local/metadata, com resolução DNS),
+  assinatura HMAC-SHA256 (esquema Inngest `t=<ts>&s=<hex>`, janela de replay ±5min) e
+  sender HTTP (timeout + `redirect: manual`) (#5)
 
 ### Changed
 

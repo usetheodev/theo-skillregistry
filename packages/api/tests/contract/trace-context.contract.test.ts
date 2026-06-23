@@ -4,7 +4,6 @@ import {
   newTraceId,
   parseTraceparent,
   resolveTraceId,
-  traceFields,
 } from '../../src/server/observability/trace-context.js';
 
 const HEX32 = /^[0-9a-f]{32}$/;
@@ -27,10 +26,6 @@ describe('trace-context (T1.2 / gap #1, ADR-1)', () => {
     expect(parseTraceparent('garbage')).toBeUndefined();
     expect(parseTraceparent(undefined)).toBeUndefined();
     expect(parseTraceparent(`00-${'0'.repeat(32)}-0123456789abcdef-01`)).toBeUndefined(); // all-zero forbidden
-  });
-
-  it('traceFields_wraps_under_trace_id', () => {
-    expect(traceFields('abc')).toEqual({ trace_id: 'abc' });
   });
 
   it('resolveTraceId_generates_when_header_malformed_or_absent', () => {

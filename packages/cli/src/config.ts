@@ -8,7 +8,7 @@ export interface TheoskillConfig {
   readonly auth?: string;
 }
 
-export const CONFIG_FILE = '.theoskillrc';
+const CONFIG_FILE = '.theoskillrc';
 
 export function configPath(cwd: string = process.cwd()): string {
   return join(cwd, CONFIG_FILE);

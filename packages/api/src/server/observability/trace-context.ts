@@ -30,11 +30,6 @@ export function parseTraceparent(header: string | undefined): string | undefined
   return traceId;
 }
 
-/** Wrap a trace id as the structured-log field shape every hop logs. */
-export function traceFields(traceId: string): { trace_id: string } {
-  return { trace_id: traceId };
-}
-
 /** Resolve a trace id from an incoming header, generating a fresh one when the
  * header is absent or malformed (EC-4 — never echo a bad header). */
 export function resolveTraceId(traceparentHeader: string | undefined): string {

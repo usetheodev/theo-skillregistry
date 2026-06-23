@@ -21,7 +21,7 @@ export interface ProviderRule {
   readonly create: () => EmbeddingProvider;
 }
 
-export const PROVIDER_REGISTRY: readonly ProviderRule[] = Object.freeze([
+const PROVIDER_REGISTRY: readonly ProviderRule[] = Object.freeze([
   {
     name: 'openai',
     detect: (env) => (env['OPENAI_API_KEY'] ?? '').length > 0, // honors OPENAI_BASE_URL inside the adapter

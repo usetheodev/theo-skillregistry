@@ -11,7 +11,9 @@ export function getPool(): Pool {
 
 /** Reset domain tables between tests (pg-boss tables live in the pgboss schema). */
 export async function truncateAll(): Promise<void> {
-  await getPool().query('TRUNCATE TABLE operations, skill_revisions, skills RESTART IDENTITY CASCADE');
+  await getPool().query(
+    'TRUNCATE TABLE webhook_deliveries, webhook_endpoints, operations, skill_revisions, skills RESTART IDENTITY CASCADE',
+  );
 }
 
 export async function closePool(): Promise<void> {

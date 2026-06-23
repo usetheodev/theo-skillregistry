@@ -7,12 +7,15 @@ import { createDb } from './db.js';
 import { registerHealthRoutes } from './handlers/health.js';
 import { registerOperationsRoutes } from './handlers/operations.js';
 import { registerSkillsRoutes } from './handlers/skills.js';
+import { registerWebhookEndpointRoutes } from './handlers/webhook-endpoints.js';
 import { createJsonLogger, type Logger } from './logger.js';
 import { createSecretlintScanner } from './payload/secretlint-scanner.js';
 import { createYauzlPayloadValidator } from './payload/yauzl-validator.js';
 import { createOperationsStore } from './store/operations-store.js';
 import { createRevisionsStore } from './store/revisions-store.js';
 import { createSkillsStore } from './store/skills-store.js';
+import { createWebhookEndpointsStore } from './store/webhook-endpoints-store.js';
+import { type DnsResolver } from './webhooks/url-safety.js';
 
 const DEFAULT_RESERVATION_HOURS = 24;
 const DEFAULT_MAX_BODY_BYTES = 35 * 1024 * 1024; // ~25MB zip after base64 envelope
@@ -25,6 +28,8 @@ export interface CreateAppOptions {
   readonly secretScanner?: SecretScanner;
   readonly reservationHours?: number;
   readonly maxBodyBytes?: number;
+  /** Injectable DNS resolver for the webhook SSRF guard (tests stub this). */
+  readonly dnsResolver?: DnsResolver;
 }
 
 /** Build the Hono app with injected dependencies (DIP, ADR-3). */
@@ -51,6 +56,11 @@ export function createApp(opts: CreateAppOptions): Hono {
     maxBodyBytes: opts.maxBodyBytes ?? envMaxBodyBytes(),
   });
   registerOperationsRoutes(app, { operationsStore: createOperationsStore(db) });
+  registerWebhookEndpointRoutes(app, {
+    endpointsStore: createWebhookEndpointsStore(db),
+    logger,
+    ...(opts.dnsResolver !== undefined ? { dnsResolver: opts.dnsResolver } : {}),
+  });
 
   return app;
 }

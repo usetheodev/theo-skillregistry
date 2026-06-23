@@ -44,6 +44,8 @@ export interface CreateSkillJobData {
   readonly content_hash: string;
   readonly payload_b64: string;
   readonly frontmatter: Record<string, unknown>;
+  /** M3: SKILL.md text — embedding source persisted on the revision. */
+  readonly skill_md: string;
 }
 
 export interface UpdateSkillJobData {
@@ -55,6 +57,8 @@ export interface UpdateSkillJobData {
   readonly content_hash?: string;
   readonly payload_b64?: string;
   readonly frontmatter?: Record<string, unknown>;
+  /** M3: SKILL.md text — present when the payload (zippedFilesystem) changed. */
+  readonly skill_md?: string;
 }
 
 export interface DeleteSkillJobData {

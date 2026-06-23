@@ -11,6 +11,9 @@ ao [Semantic Versioning](https://semver.org/).
 - M3: porta `EmbeddingProvider` (DIP) com adapters `stub` (determinístico, SHA-256 seeded +
   L2-normalizado, offline) e `openai` (SDK; `local` = mesmo adapter com `OPENAI_BASE_URL`);
   dimensão pinada em 1536 com guard fail-fast (`assertEmbeddingDim`) (#6)
+- M3: schema pgvector — coluna `vector(1536)` + tabela `embeddings` (por revisão; unique
+  `(revision_id, provider, model)`; índice HNSW cosine) + coluna `skill_revisions.skill_md`
+  (fonte do embedding capturada no ingest); extensão `vector` no bootstrap da migração (#6)
 
 ### Changed
 

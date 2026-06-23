@@ -198,6 +198,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
         content_hash: ingest.validated.contentHash,
         payload_b64: ingest.buffer.toString('base64'),
         frontmatter: ingest.frontmatter,
+        skill_md: ingest.validated.skillMd,
       },
       metric: { entry_count: ingest.validated.entryCount },
     });
@@ -262,6 +263,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       jobData['content_hash'] = ingest.validated.contentHash;
       jobData['payload_b64'] = ingest.buffer.toString('base64');
       jobData['frontmatter'] = ingest.frontmatter;
+      jobData['skill_md'] = ingest.validated.skillMd;
     }
     return enqueueOperation(deps, c, {
       skillId,

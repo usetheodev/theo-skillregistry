@@ -87,6 +87,7 @@ export function createCreateSkillHandler(
         payload: Buffer.from(data.payload_b64, 'base64'),
         contentHash: data.content_hash,
         frontmatter: data.frontmatter,
+        skillMd: data.skill_md,
       });
     });
 }
@@ -116,6 +117,7 @@ export function createUpdateSkillHandler(
           payload: Buffer.from(data.payload_b64, 'base64'),
           contentHash: data.content_hash,
           frontmatter: data.frontmatter,
+          skillMd: data.skill_md ?? '',
         });
       }
     });

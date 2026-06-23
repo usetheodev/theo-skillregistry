@@ -69,21 +69,21 @@ describeIntegration('operation lifecycle: states, idempotency, retry (T1.1)', ()
     const skills = createSkillsStore(db);
     // pre-create the skill so createWithRevision hits the unique constraint (business rule).
     await skills.createWithRevision({
-      skillId: 'dup', name: 'X', description: '', payload: Buffer.from('z'), contentHash: 'h', frontmatter: {},
+      skillId: 'dup', name: 'X', description: '', payload: Buffer.from('z'), contentHash: 'h', frontmatter: {}, skillMd: '# X',
     });
     await ops.create({ operationId: 'op_dup', skillId: 'dup', type: 'create_skill', initialState: 'CREATING' });
 
     const handle = createCreateSkillHandler({ skillsStore: skills, operationsStore: ops, logger: createNoopLogger() });
     // retryCount 0 — business rule must NOT throw (no retry) and mark FAILED.
     await handle(
-      { operation_id: 'op_dup', skill_id: 'dup', name: 'Y', description: '', content_hash: 'h2', payload_b64: Buffer.from('z2').toString('base64'), frontmatter: {} },
+      { operation_id: 'op_dup', skill_id: 'dup', name: 'Y', description: '', content_hash: 'h2', payload_b64: Buffer.from('z2').toString('base64'), frontmatter: {}, skill_md: '# Y' },
       0,
     );
     expect((await ops.get('op_dup'))?.state).toBe('FAILED');
 
     // re-running on a terminal operation is an idempotent no-op (state unchanged).
     await handle(
-      { operation_id: 'op_dup', skill_id: 'dup', name: 'Y', description: '', content_hash: 'h2', payload_b64: Buffer.from('z2').toString('base64'), frontmatter: {} },
+      { operation_id: 'op_dup', skill_id: 'dup', name: 'Y', description: '', content_hash: 'h2', payload_b64: Buffer.from('z2').toString('base64'), frontmatter: {}, skill_md: '# Y' },
       0,
     );
     expect((await ops.get('op_dup'))?.state).toBe('FAILED');
@@ -107,7 +107,7 @@ describeIntegration('operation lifecycle: states, idempotency, retry (T1.1)', ()
       },
     };
     const handle = createCreateSkillHandler({ skillsStore: flakySkills, operationsStore: ops, logger: createNoopLogger() });
-    const data = { operation_id: 'op_t', skill_id: 'transient', name: 'T', description: '', content_hash: 'h', payload_b64: Buffer.from('z').toString('base64'), frontmatter: {} };
+    const data = { operation_id: 'op_t', skill_id: 'transient', name: 'T', description: '', content_hash: 'h', payload_b64: Buffer.from('z').toString('base64'), frontmatter: {}, skill_md: '# T' };
 
     // attempt 0: transient throw → re-thrown (pg-boss would retry), state still CREATING.
     await expect(handle(data, 0)).rejects.toThrow('transient db blip');

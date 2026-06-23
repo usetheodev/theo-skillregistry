@@ -15,6 +15,13 @@ ao [Semantic Versioning](https://semver.org/).
   schemes não-http(s), IPs privados/loopback/link-local/metadata, com resolução DNS),
   assinatura HMAC-SHA256 (esquema Inngest `t=<ts>&s=<hex>`, janela de replay ±5min) e
   sender HTTP (timeout + `redirect: manual`) (#5)
+- M2: CRUD de webhook endpoints (`/v1/webhookEndpoints`) — segredo HMAC gerado pelo
+  servidor e retornado uma única vez na criação; URL validada via SSRF guard antes de
+  persistir; filtro opcional por `event_types` (#5)
+- M2: pipeline de entrega de webhooks com garantias — fan-out transacional via outbox,
+  worker de entrega com classificação de retry (2xx=entregue / 3xx-4xx=falha permanente /
+  5xx=retry com backoff → dead-letter), reconciler de órfãos via `FOR UPDATE SKIP LOCKED`
+  e dedup por `singletonKey` (entrega at-least-once com idempotência terminal) (#5)
 
 ### Changed
 

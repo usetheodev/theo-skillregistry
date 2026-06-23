@@ -1,6 +1,6 @@
 import { type WebhookEndpoint, type WebhookEventType } from '@usetheo/skillregistry/contract';
 import { type WebhookDeliveryRow, webhookDeliveries, webhookEndpoints } from '@usetheo/skillregistry/db';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { type Db } from '../db.js';
 
@@ -9,6 +9,14 @@ export interface ActiveEndpoint {
   readonly id: string;
   readonly url: string;
   readonly secret: string;
+}
+
+/** Internal endpoint view including the secret (delivery worker needs it to sign). */
+export interface InternalEndpoint {
+  readonly id: string;
+  readonly url: string;
+  readonly secret: string;
+  readonly active: boolean;
 }
 
 export interface NewEndpoint {
@@ -36,6 +44,8 @@ export interface WebhookEndpointsStore {
   remove(id: string): Promise<boolean>;
   /** Active endpoints subscribed to `eventType` (null/empty filter = all events). */
   listActiveForEvent(eventType: WebhookEventType): Promise<ActiveEndpoint[]>;
+  /** Internal view (incl. secret) by id — used by the delivery worker to sign. */
+  getInternalById(id: string): Promise<InternalEndpoint | undefined>;
 
   /** Outbox insert — a delivery row with no enqueued/delivered/failed stamp. */
   recordDelivery(input: NewDelivery): Promise<void>;
@@ -115,6 +125,15 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
       return rows;
     },
 
+    async getInternalById(id) {
+      const rows = await db
+        .select({ id: webhookEndpoints.id, url: webhookEndpoints.url, secret: webhookEndpoints.secret, active: webhookEndpoints.active })
+        .from(webhookEndpoints)
+        .where(eq(webhookEndpoints.id, id))
+        .limit(1);
+      return rows[0];
+    },
+
     async recordDelivery(input) {
       await db.insert(webhookDeliveries).values({
         id: input.id,
@@ -137,17 +156,18 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
     },
 
     async markDelivered(deliveryId) {
+      // Terminal-once: never overwrite an already-terminal delivery (idempotent under retry/DLQ).
       await db
         .update(webhookDeliveries)
         .set({ deliveredAt: new Date(), attemptCount: sql`${webhookDeliveries.attemptCount} + 1` })
-        .where(eq(webhookDeliveries.id, deliveryId));
+        .where(and(eq(webhookDeliveries.id, deliveryId), isNull(webhookDeliveries.deliveredAt), isNull(webhookDeliveries.failedAt)));
     },
 
     async markFailed(deliveryId) {
       await db
         .update(webhookDeliveries)
         .set({ failedAt: new Date(), attemptCount: sql`${webhookDeliveries.attemptCount} + 1` })
-        .where(eq(webhookDeliveries.id, deliveryId));
+        .where(and(eq(webhookDeliveries.id, deliveryId), isNull(webhookDeliveries.deliveredAt), isNull(webhookDeliveries.failedAt)));
     },
 
     async claimOrphanedDeliveries(olderThan, limit) {

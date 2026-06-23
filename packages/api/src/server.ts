@@ -1,14 +1,24 @@
 import { serve } from '@hono/node-server';
 
 import { createApp } from './server/app.js';
-import { createPool } from './server/db.js';
+import { createDb, createPool } from './server/db.js';
 import { createJsonLogger } from './server/logger.js';
 import { setupGracefulDrain } from './server/queue/graceful-drain.js';
-import { createQueue, JOB_NAMES } from './server/queue/queue.js';
+import { createQueue, JOB_NAMES, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from './server/queue/queue.js';
+import { createWebhookEndpointsStore } from './server/store/webhook-endpoints-store.js';
+import {
+  createWebhookDeliveryHandler,
+  createWebhookDlqHandler,
+  registerWebhookWorker,
+} from './server/webhooks/webhook-delivery-worker.js';
+import { createWebhookEnqueuer } from './server/webhooks/webhook-enqueuer.js';
+import { createWebhookReconciler, startWebhookReconciler } from './server/webhooks/webhook-reconciler.js';
+import { createHttpWebhookSender } from './server/webhooks/webhook-sender.js';
 import { buildWorkerHandlers } from './server/wiring.js';
 import { registerWorker } from './server/worker.js';
 
 const SHUTDOWN_DEADLINE_MS = 30_000;
+const RECONCILER_INTERVAL_MS = 30_000;
 
 async function main(): Promise<void> {
   const logger = createJsonLogger();
@@ -28,7 +38,14 @@ async function main(): Promise<void> {
   await queue.createQueue(JOB_NAMES.CREATE_SKILL);
   await queue.createQueue(JOB_NAMES.UPDATE_SKILL);
   await queue.createQueue(JOB_NAMES.DELETE_SKILL);
-  const handlers = buildWorkerHandlers(pool, logger);
+  await queue.createQueue(JOB_NAMES.WEBHOOK_DELIVERY);
+  await queue.createQueue(WEBHOOK_DELIVERY_DLQ_QUEUE_NAME);
+
+  const endpointsStore = createWebhookEndpointsStore(createDb(pool));
+
+  // onTerminal fires the webhook fan-out when an operation completes.
+  const enqueuer = createWebhookEnqueuer({ endpointsStore, queue, logger });
+  const handlers = buildWorkerHandlers(pool, logger, enqueuer);
   await registerWorker({
     queue,
     createHandler: handlers.createHandler,
@@ -36,15 +53,28 @@ async function main(): Promise<void> {
     deleteHandler: handlers.deleteHandler,
   });
 
+  // Webhook delivery worker + dead-letter consumer.
+  const sender = createHttpWebhookSender({ fetch: globalThis.fetch });
+  await registerWebhookWorker({
+    queue,
+    deliveryHandler: createWebhookDeliveryHandler({ endpointsStore, sender, logger }),
+    dlqHandler: createWebhookDlqHandler({ endpointsStore, logger }),
+  });
+
+  // Reconciler — periodically recovers orphaned (un-enqueued) deliveries.
+  const reconciler = createWebhookReconciler({ endpointsStore, queue, logger });
+  const stopReconciler = startWebhookReconciler(reconciler, RECONCILER_INTERVAL_MS, logger);
+
   const app = createApp({ pool, queue, logger });
   const server = serve({ fetch: app.fetch, port }, (info) => {
     logger.info({ port: info.port }, '@usetheo/skillregistry-api listening');
   });
 
-  // Drain order is non-negotiable: server.close → queue.stop → pool.end.
+  // Drain order is non-negotiable: server.close → reconciler → queue.stop → pool.end.
   setupGracefulDrain({
     drainables: [
       () => new Promise<void>((resolve) => { server.close(() => { resolve(); }); }),
+      () => { stopReconciler(); return Promise.resolve(); },
       async () => { await queue.stop(); },
       async () => { await pool.end(); },
     ],

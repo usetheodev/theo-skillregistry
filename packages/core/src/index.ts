@@ -4,6 +4,32 @@ export {
   parseSkillId,
 } from './domain/skill-id.js';
 export {
+  type FrontmatterErrorCode,
+  parseFrontmatter,
+  type SkillFrontmatter,
+  SkillFrontmatterError,
+} from './domain/frontmatter.js';
+export {
+  type PayloadErrorCode,
+  type PayloadFile,
+  type PayloadValidator,
+  PayloadValidationError,
+  type ValidatedPayload,
+} from './domain/payload-validator.js';
+export {
+  type SecretFinding,
+  type SecretScanner,
+} from './domain/secret-scanner.js';
+export {
+  MAX_COMPRESSION_RATIO,
+  MAX_DESCRIPTION_LENGTH,
+  MAX_FOLDER_DEPTH,
+  MAX_NAME_LENGTH,
+  MAX_SINGLE_FILE_BYTES,
+  MAX_UNCOMPRESSED_TOTAL_BYTES,
+  MAX_ZIP_ENTRIES,
+} from './domain/limits.js';
+export {
   type Operation,
   OperationSchema,
   type OperationState,

@@ -5,7 +5,7 @@ import { createPool } from './server/db.js';
 import { createJsonLogger } from './server/logger.js';
 import { setupGracefulDrain } from './server/queue/graceful-drain.js';
 import { createQueue, JOB_NAMES } from './server/queue/queue.js';
-import { buildCreateSkillHandler } from './server/wiring.js';
+import { buildWorkerHandlers } from './server/wiring.js';
 import { registerWorker } from './server/worker.js';
 
 const SHUTDOWN_DEADLINE_MS = 30_000;
@@ -26,7 +26,9 @@ async function main(): Promise<void> {
   // pg-boss MUST start before serve() — bootstraps its schema (pg-boss v10).
   await queue.start();
   await queue.createQueue(JOB_NAMES.CREATE_SKILL);
-  await registerWorker({ queue, handler: buildCreateSkillHandler(pool, logger) });
+  await queue.createQueue(JOB_NAMES.UPDATE_SKILL);
+  const handlers = buildWorkerHandlers(pool, logger);
+  await registerWorker({ queue, createHandler: handlers.createHandler, updateHandler: handlers.updateHandler });
 
   const app = createApp({ pool, queue, logger });
   const server = serve({ fetch: app.fetch, port }, (info) => {

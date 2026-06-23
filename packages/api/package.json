@@ -14,17 +14,24 @@
   "dependencies": {
     "@hono/node-server": "^1.13.0",
     "@paralleldrive/cuid2": "^2.3.1",
+    "@secretlint/core": "^11.3.1",
+    "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
     "@usetheo/skillregistry": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "hono": "^4.12.25",
     "pg": "^8.13.0",
     "pg-boss": "^10.4.2",
+    "yauzl": "^3.3.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@secretlint/types": "^11.3.1",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
+    "@types/yauzl": "^2.10.3",
+    "@types/yazl": "^2.4.5",
     "typescript": "^5.4.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "yazl": "^3.3.1"
   }
 }

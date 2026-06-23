@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../../src/server/app.js';
 import { createNoopLogger } from '../../src/server/logger.js';
 
-// Health + input validation never touch the DB/queue, so trivial fakes suffice.
+// Health + early input validation never touch DB/queue, so trivial fakes suffice.
 const fakePool = {} as unknown as Pool;
 const fakeQueue = { send: () => Promise.resolve('job') } as unknown as PgBoss;
 
@@ -20,33 +20,32 @@ describe('API contract (no DB)', () => {
     expect(await res.json()).toEqual({ status: 'ok' });
   });
 
-  it('POST /v1/skills with reserved gcp- prefix returns 400 on skill_id path', async () => {
+  it('POST /v1/skills with reserved gcp- prefix returns 400 invalid_skill_id (before any DB call)', async () => {
     const res = await app().request('/v1/skills', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ skill_id: 'gcp-x', name: 'X' }),
+      body: JSON.stringify({ skill_id: 'gcp-x', zippedFilesystem: 'AAAA' }),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string; issues: { path: (string | number)[] }[] };
-    expect(body.error).toBe('invalid_input');
-    expect(body.issues[0]?.path).toEqual(['skill_id']);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: 'invalid_skill_id' });
   });
 
-  it('POST /v1/skills with empty name returns 400', async () => {
+  it('POST /v1/skills with missing skill_id returns 400', async () => {
     const res = await app().request('/v1/skills', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ skill_id: 'demo', name: '' }),
+      body: JSON.stringify({ zippedFilesystem: 'AAAA' }),
     });
     expect(res.status).toBe(400);
   });
 
-  it('POST /v1/skills with non-JSON body returns 400', async () => {
+  it('POST /v1/skills with non-JSON body returns 400 invalid_input', async () => {
     const res = await app().request('/v1/skills', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: 'not-json',
     });
     expect(res.status).toBe(400);
+    expect((await res.json()) as { error: string }).toMatchObject({ error: 'invalid_input' });
   });
 });

@@ -109,16 +109,16 @@ intenção do usuário.
 
 ---
 
-### M1 — [ ] Modelo de skill + validação rígida (formato Theokit)
+### M1 — [x] Modelo de skill + validação rígida (formato Theokit)
 
 **Objective:** Implementar o modelo de domínio Skill/SkillRevision com o **formato `SKILL.md`
 nativo do Theokit** e validação de payload rígida, mais o CRUD completo com revisões imutáveis.
 
 **Definition of done:**
 
-- [ ] Parser de frontmatter `SKILL.md` compatível com o Theokit (`name/version/requires/description/allowed-tools/category/dependencies`); skill malformada é rejeitada na fronteira com erro tipado.
-- [ ] Validação de payload (zip): limites de itens/tamanho/ratio/profundidade, bloqueio de path traversal (`..`), symlinks e nomes duplicados; `SKILL.md` obrigatório na raiz. Inclui secret scan.
-- [ ] CRUD completo: `Create/Get/List(paginado)/Update(updateMask)/Delete` + revisões imutáveis; `skillId` validado (charset, imutável) e reservado pós-delete (janela configurável, não 24h fixos).
+- [x] Parser de frontmatter `SKILL.md` compatível com o Theokit (`name/version/requires/description/allowed-tools/category/dependencies`); skill malformada é rejeitada na fronteira com erro tipado.
+- [x] Validação de payload (zip): limites de itens/tamanho/ratio/profundidade, bloqueio de path traversal (`..`), symlinks e nomes duplicados; `SKILL.md` obrigatório na raiz. Inclui secret scan.
+- [x] CRUD completo: `Create/Get/List(paginado)/Update(updateMask)/Delete` + revisões imutáveis; `skillId` validado (charset, imutável) e reservado pós-delete (janela configurável, não 24h fixos).
 
 **Dependencies:** M0.
 

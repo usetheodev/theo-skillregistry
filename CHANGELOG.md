@@ -20,6 +20,7 @@ ao [Semantic Versioning](https://semver.org/).
 - `/discover-plan-confidence`: threshold parser read the wrong delimiter (`|`) so every discovery plan scored `INVALID` regardless of quality; now reads the documented `KEY = VALUE` band format (ADR 0001) (#8)
 
 ### Security
+- M9: o logger estruturado passa a redigir valores de chaves sensíveis (authorization/password/token/secret e sufixos `_token`/`_secret`/`_key`/`_password`) antes de emitir — segredos nunca vazam para os logs (#9)
 
 ## [0.6.0] - 2026-06-23
 

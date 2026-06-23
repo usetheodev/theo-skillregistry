@@ -14,7 +14,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type PgBoss from 'pg-boss';
 
 import { type Logger } from '../logger.js';
-import { JOB_NAMES, SEND_OPTIONS } from '../queue/queue.js';
+import { JOB_NAMES, SKILL_SEND_OPTIONS } from '../queue/queue.js';
 import { type OperationsStore } from '../store/operations-store.js';
 import { type RevisionsStore } from '../store/revisions-store.js';
 import { type SkillsStore } from '../store/skills-store.js';
@@ -117,21 +117,47 @@ function fail(c: Context, err: unknown): Response {
 async function enqueueOperation(
   deps: SkillsRoutesDeps,
   c: Context,
-  skillId: string,
-  jobName: string,
-  jobData: Record<string, unknown>,
-  metric: Readonly<Record<string, unknown>>,
+  args: {
+    skillId: string;
+    jobName: string;
+    initialState: 'CREATING' | 'UPDATING' | 'DELETING';
+    idempotencyKey: string | undefined;
+    jobData: Record<string, unknown>;
+    metric: Readonly<Record<string, unknown>>;
+  },
 ): Promise<Response> {
-  const operationId = `op_${createId()}`;
-  await deps.operationsStore.create({ operationId, skillId, type: jobName });
+  const newId = `op_${createId()}`;
+  const { operationId, created } = await deps.operationsStore.create({
+    operationId: newId,
+    skillId: args.skillId,
+    type: args.jobName,
+    initialState: args.initialState,
+    ...(args.idempotencyKey !== undefined ? { idempotencyKey: args.idempotencyKey } : {}),
+  });
+  if (!created) {
+    // Idempotent replay — return the existing operation without re-enqueuing.
+    return c.json({ operation_id: operationId, skill_id: args.skillId }, 202);
+  }
   try {
-    await deps.queue.send(jobName, { operation_id: operationId, skill_id: skillId, ...jobData }, SEND_OPTIONS);
+    await deps.queue.send(
+      args.jobName,
+      { operation_id: operationId, skill_id: args.skillId, ...args.jobData },
+      SKILL_SEND_OPTIONS,
+    );
   } catch (err) {
-    await deps.operationsStore.updateState(operationId, 'failed', `failed to enqueue ${jobName}`);
+    await deps.operationsStore.updateState(operationId, 'FAILED', `failed to enqueue ${args.jobName}`);
     throw err;
   }
-  deps.logger.info({ operation_id: operationId, skill_id: skillId, job: jobName, ...metric }, `${jobName} enqueued`);
-  return c.json({ operation_id: operationId, skill_id: skillId }, 202);
+  deps.logger.info(
+    { operation_id: operationId, skill_id: args.skillId, job: args.jobName, ...args.metric },
+    `${args.jobName} enqueued`,
+  );
+  return c.json({ operation_id: operationId, skill_id: args.skillId }, 202);
+}
+
+function idempotencyKeyOf(c: Context): string | undefined {
+  const key = c.req.header('Idempotency-Key');
+  return key !== undefined && key.length > 0 ? key : undefined;
 }
 
 export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
@@ -161,20 +187,20 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       return fail(c, err);
     }
 
-    return enqueueOperation(
-      deps,
-      c,
+    return enqueueOperation(deps, c, {
       skillId,
-      JOB_NAMES.CREATE_SKILL,
-      {
+      jobName: JOB_NAMES.CREATE_SKILL,
+      initialState: 'CREATING',
+      idempotencyKey: idempotencyKeyOf(c),
+      jobData: {
         name: ingest.name,
         description: ingest.description,
         content_hash: ingest.validated.contentHash,
         payload_b64: ingest.buffer.toString('base64'),
         frontmatter: ingest.frontmatter,
       },
-      { entry_count: ingest.validated.entryCount },
-    );
+      metric: { entry_count: ingest.validated.entryCount },
+    });
   });
 
   // GET /v1/skills — keyset-paginated list of live skills.
@@ -237,19 +263,31 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       jobData['payload_b64'] = ingest.buffer.toString('base64');
       jobData['frontmatter'] = ingest.frontmatter;
     }
-    return enqueueOperation(deps, c, skillId, JOB_NAMES.UPDATE_SKILL, jobData, { mask });
+    return enqueueOperation(deps, c, {
+      skillId,
+      jobName: JOB_NAMES.UPDATE_SKILL,
+      initialState: 'UPDATING',
+      idempotencyKey: idempotencyKeyOf(c),
+      jobData,
+      metric: { mask },
+    });
   });
 
-  // DELETE /v1/skills/:id — soft-delete + id reservation (synchronous).
+  // DELETE /v1/skills/:id — LRO (DELETING). Soft-delete + id reservation in the worker.
   app.delete('/v1/skills/:id', async (c) => {
     const skillId = c.req.param('id');
-    const reservedUntil = new Date(Date.now() + deps.reservationHours * 3600_000);
-    const existed = await deps.skillsStore.softDelete(skillId, reservedUntil);
-    if (!existed) {
+    if ((await deps.skillsStore.getView(skillId)) === undefined) {
       return c.json({ error: 'not_found' }, 404);
     }
-    deps.logger.info({ skill_id: skillId, reserved_until: reservedUntil.toISOString() }, 'skill deleted');
-    return c.json({ skill_id: skillId, reserved_until: reservedUntil.toISOString() }, 200);
+    const reservedUntil = new Date(Date.now() + deps.reservationHours * 3600_000).toISOString();
+    return enqueueOperation(deps, c, {
+      skillId,
+      jobName: JOB_NAMES.DELETE_SKILL,
+      initialState: 'DELETING',
+      idempotencyKey: idempotencyKeyOf(c),
+      jobData: { reserved_until: reservedUntil },
+      metric: { reserved_until: reservedUntil },
+    });
   });
 
   // GET /v1/skills/:id/revisions

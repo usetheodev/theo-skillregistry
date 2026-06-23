@@ -27,8 +27,14 @@ async function main(): Promise<void> {
   await queue.start();
   await queue.createQueue(JOB_NAMES.CREATE_SKILL);
   await queue.createQueue(JOB_NAMES.UPDATE_SKILL);
+  await queue.createQueue(JOB_NAMES.DELETE_SKILL);
   const handlers = buildWorkerHandlers(pool, logger);
-  await registerWorker({ queue, createHandler: handlers.createHandler, updateHandler: handlers.updateHandler });
+  await registerWorker({
+    queue,
+    createHandler: handlers.createHandler,
+    updateHandler: handlers.updateHandler,
+    deleteHandler: handlers.deleteHandler,
+  });
 
   const app = createApp({ pool, queue, logger });
   const server = serve({ fetch: app.fetch, port }, (info) => {

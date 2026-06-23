@@ -2,9 +2,39 @@ import { z } from 'zod';
 
 import { parseSkillId } from '../domain/skill-id.js';
 
-/** Operation lifecycle states for M0 (richer states arrive in M1/M2). */
-export const OperationStateSchema = z.enum(['CREATING', 'done', 'failed']);
+/**
+ * Operation lifecycle states (M2). In-progress states reflect the job type
+ * (CREATING/UPDATING/DELETING); terminal states are ACTIVE (succeeded) / FAILED.
+ */
+export const OperationStateSchema = z.enum([
+  'CREATING',
+  'UPDATING',
+  'DELETING',
+  'ACTIVE',
+  'FAILED',
+]);
 export type OperationState = z.infer<typeof OperationStateSchema>;
+
+/** Webhook event types emitted on operation completion. */
+export const WebhookEventTypeSchema = z.enum([
+  'skill.created',
+  'skill.updated',
+  'skill.deleted',
+]);
+export type WebhookEventType = z.infer<typeof WebhookEventTypeSchema>;
+
+/** Webhook payload delivered to subscribed endpoints. */
+export const WebhookPayloadSchema = z.object({
+  event_id: z.string(),
+  event_type: WebhookEventTypeSchema,
+  data: z.object({
+    skill_id: z.string(),
+    operation_id: z.string(),
+    state: z.enum(['ACTIVE', 'FAILED']),
+    occurred_at: z.string(),
+  }),
+});
+export type WebhookPayload = z.infer<typeof WebhookPayloadSchema>;
 
 /** Input payload for POST /v1/skills. Minimal in M0 (Theokit-aligned fields). */
 export const SkillInputSchema = z

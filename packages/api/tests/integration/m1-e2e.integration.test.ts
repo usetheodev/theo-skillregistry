@@ -15,7 +15,7 @@ import { buildZipBase64, skillMd } from './_helpers/zip.js';
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 interface OpBody {
-  state: 'CREATING' | 'done' | 'failed';
+  state: 'CREATING' | 'UPDATING' | 'DELETING' | 'ACTIVE' | 'FAILED';
   error: string | null;
 }
 
@@ -31,10 +31,10 @@ async function pollDone(app: Hono, opId: string): Promise<OpBody> {
   for (let i = 0; i < 200; i++) {
     const res = await app.request(`/v1/operations/${opId}`);
     const op = (await res.json()) as OpBody;
-    if (op.state === 'done') {
+    if (op.state === 'ACTIVE') {
       return op;
     }
-    if (op.state === 'failed') {
+    if (op.state === 'FAILED') {
       throw new Error(`operation failed: ${op.error ?? ''}`);
     }
     await sleep(50);
@@ -49,7 +49,12 @@ describeIntegration('M1 skill ingestion E2E (T4)', () => {
   beforeAll(async () => {
     boss = await startBoss();
     const handlers = buildWorkerHandlers(getPool(), createNoopLogger());
-    await registerWorker({ queue: boss, createHandler: handlers.createHandler, updateHandler: handlers.updateHandler });
+    await registerWorker({
+      queue: boss,
+      createHandler: handlers.createHandler,
+      updateHandler: handlers.updateHandler,
+      deleteHandler: handlers.deleteHandler,
+    });
   });
   beforeEach(truncateAll);
   afterAll(async () => {
@@ -111,7 +116,8 @@ describeIntegration('M1 skill ingestion E2E (T4)', () => {
     expect(body.next_page_token).toBe('p-one');
 
     const del = await app.request('/v1/skills/p-one', { method: 'DELETE' });
-    expect(del.status).toBe(200);
+    expect(del.status).toBe(202);
+    await pollDone(app, ((await del.json()) as { operation_id: string }).operation_id);
     expect((await app.request('/v1/skills/p-one')).status).toBe(404);
     // recreate within reservation window → 409 reserved
     const zip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('p-one') }]);
@@ -164,7 +170,7 @@ describeIntegration('M1 skill ingestion E2E (T4)', () => {
       opIds.map(async (opId) => {
         for (let i = 0; i < 200; i++) {
           const op = (await (await app.request(`/v1/operations/${opId}`)).json()) as OpBody;
-          if (op.state === 'done' || op.state === 'failed') {
+          if (op.state === 'ACTIVE' || op.state === 'FAILED') {
             return op.state;
           }
           await sleep(50);
@@ -172,7 +178,7 @@ describeIntegration('M1 skill ingestion E2E (T4)', () => {
         throw new Error('not terminal');
       }),
     );
-    expect(states.filter((s) => s === 'done')).toHaveLength(1);
+    expect(states.filter((s) => s === 'ACTIVE')).toHaveLength(1);
     const skillCount = await getPool().query<{ count: string }>(
       "SELECT count(*)::text AS count FROM skills WHERE skill_id = 'race-skill'",
     );

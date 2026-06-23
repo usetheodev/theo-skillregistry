@@ -10,5 +10,6 @@ export async function startBoss(): Promise<PgBoss> {
   await boss.start();
   await boss.createQueue(JOB_NAMES.CREATE_SKILL);
   await boss.createQueue(JOB_NAMES.UPDATE_SKILL);
+  await boss.createQueue(JOB_NAMES.DELETE_SKILL);
   return boss;
 }

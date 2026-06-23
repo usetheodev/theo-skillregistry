@@ -8,6 +8,20 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.6.0] - 2026-06-23
+
+### Added
 - M5: orquestrador único `validateSkillPayload` no `core` — os 4 checks de skill (zip-safety →
   frontmatter Theokit → secret scan) em uma fonte de verdade compartilhada pelo servidor e pela
   CLI; resultado estruturado por regra (DRY — sem divergência) (#8)
@@ -17,18 +31,11 @@ ao [Semantic Versioning](https://semver.org/).
   → publica reusando a API Create/Update (POST novo / PATCH existente). Args via `node:util parseArgs`
   (sem dep de arg-parser); exit codes scriptáveis (#8)
 
+
 ### Changed
 - M5: a fronteira do servidor (`POST`/`PATCH /v1/skills`) passa a delegar a validação ao
   `validateSkillPayload` do `core` em vez de orquestrar os checks inline (mesmo comportamento/códigos
   de erro 400; elimina duplicação de lógica) (#8)
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [0.5.0] - 2026-06-23
 

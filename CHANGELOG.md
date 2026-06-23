@@ -8,6 +8,20 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.4.0] - 2026-06-23
+
+### Added
 - M3: porta `EmbeddingProvider` (DIP) com adapters `stub` (determinístico, SHA-256 seeded +
   L2-normalizado, offline) e `openai` (SDK; `local` = mesmo adapter com `OPENAI_BASE_URL`);
   dimensão pinada em 1536 com guard fail-fast (`assertEmbeddingDim`) (#6)
@@ -21,16 +35,6 @@ ao [Semantic Versioning](https://semver.org/).
   de create/update; embed worker gera `name+description+corpo`, valida a dimensão (fail-fast) e
   faz upsert idempotente (`ON CONFLICT (revision_id, provider, model) DO NOTHING`); dead-letter
   observável para embeds esgotados; busca por similaridade cosseno consultável (#6)
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [0.3.0] - 2026-06-23
 

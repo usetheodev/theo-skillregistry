@@ -8,6 +8,9 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- M4: índice de busca lexical — coluna `skills.search_text` (name + description + corpo SKILL.md
+  corrente, mantida sincronamente nas 3 vias de escrita) + coluna gerada `search_tsv` (tsvector
+  `english`) com índice GIN para Full-Text Search do Postgres (#7)
 
 ### Changed
 

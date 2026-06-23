@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./validators": "./src/validators.ts",
+    "./testkit": "./src/testkit.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts' --no-error-on-unmatched-pattern",

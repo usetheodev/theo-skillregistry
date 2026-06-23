@@ -1,13 +1,11 @@
 import { createId } from '@paralleldrive/cuid2';
 import {
   InvalidSkillIdError,
-  parseFrontmatter,
   parseSkillId,
   type PayloadValidator,
-  PayloadValidationError,
   type SecretScanner,
-  SkillFrontmatterError,
   type ValidatedPayload,
+  validateSkillPayload,
 } from '@usetheo/skillregistry';
 import { type Context, type Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -59,44 +57,30 @@ function decodeBase64Zip(b64: unknown): Buffer {
   return Buffer.from(b64, 'base64');
 }
 
-/** Validate a zip payload at the boundary: zip-safety → frontmatter → secret scan. */
+/**
+ * Validate a zip payload at the boundary — delegates to the SHARED core checker
+ * (`validateSkillPayload`) so the server and the dev CLI never diverge (M5 DRY).
+ * Maps a rule violation to the same HTTP 400 + code as before.
+ */
 async function ingestPayload(deps: SkillsRoutesDeps, b64: unknown): Promise<IngestResult> {
   const buffer = decodeBase64Zip(b64);
-  let validated: ValidatedPayload;
-  try {
-    validated = await deps.payloadValidator.validate(buffer);
-  } catch (err) {
-    if (err instanceof PayloadValidationError) {
-      throw new BoundaryError(400, err.code);
+  const result = await validateSkillPayload(buffer, {
+    payloadValidator: deps.payloadValidator,
+    secretScanner: deps.secretScanner,
+  });
+  if (!result.ok) {
+    if (result.code === 'secret_detected') {
+      deps.logger.error({ secret_findings: result.details }, 'payload rejected: secret detected');
     }
-    throw err;
+    throw new BoundaryError(400, result.code);
   }
-
-  let name: string;
-  let description: string;
-  let frontmatter: Record<string, unknown>;
-  try {
-    const fm = parseFrontmatter(validated.skillMd);
-    name = fm.name;
-    description = fm.description;
-    frontmatter = { ...fm.fields };
-  } catch (err) {
-    if (err instanceof SkillFrontmatterError) {
-      throw new BoundaryError(400, err.code);
-    }
-    throw err;
-  }
-
-  const findings = await deps.secretScanner.scan(validated.files);
-  if (findings.length > 0) {
-    deps.logger.error(
-      { secret_findings: findings.map((f) => ({ file: f.file, type: f.type })) },
-      'payload rejected: secret detected',
-    );
-    throw new BoundaryError(400, 'secret_detected');
-  }
-
-  return { buffer, validated, name, description, frontmatter };
+  return {
+    buffer,
+    validated: result.validated,
+    name: result.name,
+    description: result.description,
+    frontmatter: result.frontmatter,
+  };
 }
 
 function fail(c: Context, err: unknown): Response {

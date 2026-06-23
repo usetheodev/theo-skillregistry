@@ -17,6 +17,9 @@ ao [Semantic Versioning](https://semver.org/).
 - M4: endpoint `GET /v1/skills:retrieve?query=...&topK=...&strategy=...` — busca híbrida (default)
   com `score` explícito por resultado e `trace_id`; dispatcher por strategy (vector/keyword/hybrid);
   métrica `retrieve` (latency_ms + top_score) instrumentada no caminho (north-star) (#7)
+- M4: conjunto de avaliação interno versionado (`eval/dataset.json` + `eval/run-recall.ts`) —
+  **Recall@5 ≥ 0.85** e retrieve **p95 < 200ms** medidos e reproduzíveis em teste de integração
+  (recall via componente FTS lexical com stub embedder; OpenAI adiciona recall semântico) (#7)
 
 ### Changed
 

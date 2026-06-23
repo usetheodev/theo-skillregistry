@@ -16,6 +16,7 @@ export interface Clock {
 const systemClock: Clock = { now: () => new Date() };
 
 const DEFAULT_GRACE_MS = 60_000;
+const DEFAULT_STUCK_GRACE_MS = 600_000; // 10 min ≫ full retry span (avoid racing live retries)
 const DEFAULT_BATCH_LIMIT = 100;
 
 export interface WebhookReconcilerDeps {
@@ -24,12 +25,14 @@ export interface WebhookReconcilerDeps {
   readonly logger: Logger;
   /** Only deliveries older than this are considered orphans (avoid racing live fan-out). */
   readonly graceMs?: number;
+  /** Deliveries enqueued but non-terminal longer than this are re-driven (lost DLQ event). */
+  readonly stuckGraceMs?: number;
   readonly batchLimit?: number;
   readonly clock?: Clock;
 }
 
 export interface WebhookReconciler {
-  /** Claim + re-enqueue orphaned deliveries once. Returns how many were recovered. */
+  /** Claim + re-enqueue orphaned and stuck deliveries once. Returns how many were re-driven. */
   runOnce(): Promise<number>;
 }
 
@@ -42,27 +45,43 @@ export interface WebhookReconciler {
 export function createWebhookReconciler(deps: WebhookReconcilerDeps): WebhookReconciler {
   const clock = deps.clock ?? systemClock;
   const graceMs = deps.graceMs ?? DEFAULT_GRACE_MS;
+  const stuckGraceMs = deps.stuckGraceMs ?? DEFAULT_STUCK_GRACE_MS;
   const batchLimit = deps.batchLimit ?? DEFAULT_BATCH_LIMIT;
+
+  const reenqueue = async (d: { id: string; endpointId: string; payload: unknown }): Promise<void> => {
+    const jobData: WebhookDeliveryJobData = {
+      delivery_id: d.id,
+      endpoint_id: d.endpointId,
+      payload: d.payload as Record<string, unknown>,
+    };
+    await deps.queue.send(JOB_NAMES.WEBHOOK_DELIVERY, jobData, {
+      ...WEBHOOK_DELIVERY_SEND_OPTIONS,
+      singletonKey: d.id,
+      singletonSeconds: WEBHOOK_DELIVERY_SINGLETON_SECONDS,
+    });
+  };
+
   return {
     async runOnce() {
-      const cutoff = new Date(clock.now().getTime() - graceMs);
-      const orphans = await deps.endpointsStore.claimOrphanedDeliveries(cutoff, batchLimit);
+      const now = clock.now().getTime();
+      const orphans = await deps.endpointsStore.claimOrphanedDeliveries(new Date(now - graceMs), batchLimit);
       for (const orphan of orphans) {
-        const jobData: WebhookDeliveryJobData = {
-          delivery_id: orphan.id,
-          endpoint_id: orphan.endpointId,
-          payload: orphan.payload as Record<string, unknown>,
-        };
-        await deps.queue.send(JOB_NAMES.WEBHOOK_DELIVERY, jobData, {
-          ...WEBHOOK_DELIVERY_SEND_OPTIONS,
-          singletonKey: orphan.id,
-          singletonSeconds: WEBHOOK_DELIVERY_SINGLETON_SECONDS,
-        });
+        await reenqueue(orphan);
       }
-      if (orphans.length > 0) {
-        deps.logger.info({ recovered: orphans.length }, 'webhook reconciler recovered orphaned deliveries');
+      // Stuck = enqueued but never terminal (e.g. a lost dead-letter event). The
+      // singletonKey dedups against any still-live original job.
+      const stuck = await deps.endpointsStore.listStuckDeliveries(new Date(now - stuckGraceMs), batchLimit);
+      for (const d of stuck) {
+        await reenqueue(d);
       }
-      return orphans.length;
+      const total = orphans.length + stuck.length;
+      if (total > 0) {
+        deps.logger.info(
+          { orphans: orphans.length, stuck: stuck.length },
+          'webhook reconciler re-drove deliveries',
+        );
+      }
+      return total;
     },
   };
 }

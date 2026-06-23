@@ -33,6 +33,19 @@ export interface NewDelivery {
   readonly payload: unknown;
 }
 
+/** Domain view of a delivery row (port boundary — no ORM type leaks out). */
+export interface DeliveryRecord {
+  readonly id: string;
+  readonly endpointId: string;
+  readonly eventType: string;
+  readonly payload: unknown;
+  readonly attemptCount: number;
+  readonly deliveredAt: Date | null;
+  readonly failedAt: Date | null;
+  readonly enqueuedAt: Date | null;
+  readonly createTime: Date;
+}
+
 export interface WebhookEndpointsStore {
   /** Persist a new endpoint (id + secret are caller-generated). */
   create(input: NewEndpoint): Promise<void>;
@@ -49,8 +62,8 @@ export interface WebhookEndpointsStore {
 
   /** Outbox insert — a delivery row with no enqueued/delivered/failed stamp. */
   recordDelivery(input: NewDelivery): Promise<void>;
-  /** Fetch a delivery row by id, or undefined. */
-  getDeliveryById(id: string): Promise<WebhookDeliveryRow | undefined>;
+  /** Fetch a delivery (domain view) by id, or undefined. */
+  getDeliveryById(id: string): Promise<DeliveryRecord | undefined>;
   /** Mark a delivery as enqueued (claims it out of the orphan scan). */
   stampEnqueued(deliveryId: string): Promise<void>;
   /** Terminal success — sets delivered_at and bumps the attempt counter. */
@@ -62,7 +75,14 @@ export interface WebhookEndpointsStore {
    * outbox insert and enqueue). Claims them atomically via FOR UPDATE SKIP LOCKED
    * and stamps enqueued_at so a concurrent reconciler cannot double-claim.
    */
-  claimOrphanedDeliveries(olderThan: Date, limit: number): Promise<WebhookDeliveryRow[]>;
+  claimOrphanedDeliveries(olderThan: Date, limit: number): Promise<DeliveryRecord[]>;
+  /**
+   * Recover STUCK deliveries — enqueued but never reached a terminal stamp and
+   * older than `olderThan` (a lost dead-letter event would otherwise leave them
+   * non-terminal forever, invisible to the orphan scan). Returned for re-enqueue;
+   * the job singletonKey dedups against any still-live original job.
+   */
+  listStuckDeliveries(olderThan: Date, limit: number): Promise<DeliveryRecord[]>;
 }
 
 function toPublic(row: {
@@ -78,6 +98,20 @@ function toPublic(row: {
     active: row.active,
     event_types: (row.eventTypes as WebhookEventType[] | null) ?? null,
     create_time: row.createTime.toISOString(),
+  };
+}
+
+function toRecord(row: WebhookDeliveryRow): DeliveryRecord {
+  return {
+    id: row.id,
+    endpointId: row.endpointId,
+    eventType: row.eventType,
+    payload: row.payload,
+    attemptCount: row.attemptCount,
+    deliveredAt: row.deliveredAt,
+    failedAt: row.failedAt,
+    enqueuedAt: row.enqueuedAt,
+    createTime: row.createTime,
   };
 }
 
@@ -145,7 +179,8 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
 
     async getDeliveryById(id) {
       const rows = await db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, id)).limit(1);
-      return rows[0];
+      const row = rows[0];
+      return row === undefined ? undefined : toRecord(row);
     },
 
     async stampEnqueued(deliveryId) {
@@ -188,7 +223,24 @@ export function createWebhookEndpointsStore(db: Db): WebhookEndpointsStore {
                   d.payload, d.attempt_count AS "attemptCount", d.delivered_at AS "deliveredAt",
                   d.failed_at AS "failedAt", d.enqueued_at AS "enqueuedAt", d.create_time AS "createTime"
       `);
-      return result.rows as unknown as WebhookDeliveryRow[];
+      return (result.rows as unknown as WebhookDeliveryRow[]).map(toRecord);
+    },
+
+    async listStuckDeliveries(olderThan, limit) {
+      const rows = await db
+        .select()
+        .from(webhookDeliveries)
+        .where(
+          and(
+            isNull(webhookDeliveries.deliveredAt),
+            isNull(webhookDeliveries.failedAt),
+            sql`${webhookDeliveries.enqueuedAt} IS NOT NULL`,
+            sql`${webhookDeliveries.enqueuedAt} < ${olderThan.toISOString()}`,
+          ),
+        )
+        .orderBy(webhookDeliveries.enqueuedAt)
+        .limit(limit);
+      return rows.map(toRecord);
     },
   } satisfies WebhookEndpointsStore;
 }

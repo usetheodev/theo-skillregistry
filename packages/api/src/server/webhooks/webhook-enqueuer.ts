@@ -32,6 +32,11 @@ export interface WebhookEnqueuerDeps {
  * persisted (enqueued_at NULL) BEFORE the job is sent, so a crash between the two
  * leaves a recoverable orphan that the reconciler re-enqueues. The job's
  * singletonKey dedups any reconciler re-enqueue that races the original send.
+ *
+ * Delivery semantics: AT-LEAST-ONCE. A crash between send and stampEnqueued, or a
+ * reconciler sweep, can re-drive a delivery. Every POST carries a stable
+ * `webhook-id` header (= delivery id, invariant across retries and re-drives) so
+ * subscribers MUST dedup on it to achieve effectively-once processing.
  */
 export function createWebhookEnqueuer(deps: WebhookEnqueuerDeps): OnOperationTerminal {
   const clock = deps.clock ?? systemClock;

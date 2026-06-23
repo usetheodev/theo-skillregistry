@@ -53,8 +53,8 @@ async function main(): Promise<void> {
     deleteHandler: handlers.deleteHandler,
   });
 
-  // Webhook delivery worker + dead-letter consumer.
-  const sender = createHttpWebhookSender({ fetch: globalThis.fetch });
+  // Webhook delivery worker + dead-letter consumer (SSRF-safe pinned egress).
+  const sender = createHttpWebhookSender();
   await registerWebhookWorker({
     queue,
     deliveryHandler: createWebhookDeliveryHandler({ endpointsStore, sender, logger }),

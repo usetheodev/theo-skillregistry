@@ -19,6 +19,10 @@ export type VerifyResult =
   | { valid: true }
   | { valid: false; reason: 'malformed' | 'expired' | 'mismatch' };
 
+// NOTE: exported for webhook CONSUMERS (subscribers verifying our signatures) and
+// the test suite — the registry itself only signs, so there is no in-registry
+// production caller by design. Do not flag as a dead export.
+
 export function verifyWebhookSignature(
   secret: string,
   body: Buffer,

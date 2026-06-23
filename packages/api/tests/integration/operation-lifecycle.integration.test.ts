@@ -88,4 +88,52 @@ describeIntegration('operation lifecycle: states, idempotency, retry (T1.1)', ()
     );
     expect((await ops.get('op_dup'))?.state).toBe('FAILED');
   });
+
+  it('worker RETRIES a transient error and reaches ACTIVE on a later attempt', async () => {
+    const db = createDb(getPool());
+    const ops = createOperationsStore(db);
+    const realSkills = createSkillsStore(db);
+    await ops.create({ operationId: 'op_t', skillId: 'transient', type: 'create_skill', initialState: 'CREATING' });
+
+    let attempts = 0;
+    const flakySkills = {
+      ...realSkills,
+      createWithRevision: (input: Parameters<typeof realSkills.createWithRevision>[0]) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('transient db blip'); // plain error → must retry, NOT mark FAILED
+        }
+        return realSkills.createWithRevision(input);
+      },
+    };
+    const handle = createCreateSkillHandler({ skillsStore: flakySkills, operationsStore: ops, logger: createNoopLogger() });
+    const data = { operation_id: 'op_t', skill_id: 'transient', name: 'T', description: '', content_hash: 'h', payload_b64: Buffer.from('z').toString('base64'), frontmatter: {} };
+
+    // attempt 0: transient throw → re-thrown (pg-boss would retry), state still CREATING.
+    await expect(handle(data, 0)).rejects.toThrow('transient db blip');
+    expect((await ops.get('op_t'))?.state).toBe('CREATING');
+    // attempt 1: succeeds → ACTIVE.
+    await handle(data, 1);
+    expect((await ops.get('op_t'))?.state).toBe('ACTIVE');
+  });
+
+  it('two CONCURRENT requests with the same Idempotency-Key create exactly one operation', async () => {
+    app = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger() });
+    const zip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('race-skill') }]);
+    const post = () =>
+      app.request('/v1/skills', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'Idempotency-Key': 'race-key' },
+        body: JSON.stringify({ skill_id: 'race-skill', zippedFilesystem: zip }),
+      });
+    const [r1, r2] = await Promise.all([post(), post()]);
+    const id1 = ((await r1.json()) as { operation_id: string }).operation_id;
+    const id2 = ((await r2.json()) as { operation_id: string }).operation_id;
+    expect(id1).toBe(id2); // both resolve to the same operation under contention
+
+    const count = await getPool().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM operations WHERE skill_id = 'race-skill'",
+    );
+    expect(count.rows[0]?.count).toBe('1'); // partial-unique index arbitrated the race
+  });
 });

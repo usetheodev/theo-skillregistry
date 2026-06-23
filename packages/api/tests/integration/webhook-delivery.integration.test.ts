@@ -196,4 +196,55 @@ describeIntegration('webhook delivery pipeline E2E (T5.1)', () => {
 
     await waitFor(async () => (await deliveryRow('whd_orphan'))?.delivered_at !== null);
   });
+
+  it('retries on a transient network error then delivers', async () => {
+    sender.responder = (i) => (i === 0 ? 'throw' : 204); // first attempt errors, then succeeds
+    app = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger(), dnsResolver: publicResolver });
+    await createEndpoint(app, ['skill.created']);
+    const opId = await postSkill(app, 'wh-neterr');
+    expect(await pollOpState(app, opId, 'ACTIVE')).toBe('ACTIVE');
+
+    await waitFor(() => sender.calls.length >= 2); // retried after the network error
+    const did = sender.calls[0]?.headers['webhook-id'];
+    if (did === undefined) throw new Error('no webhook-id');
+    await waitFor(async () => (await deliveryRow(did))?.delivered_at !== null);
+  });
+
+  it('does NOT deliver to an endpoint whose event-type filter excludes the event', async () => {
+    app = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger(), dnsResolver: publicResolver });
+    await createEndpoint(app, ['skill.deleted']); // subscribed only to deletes
+    const opId = await postSkill(app, 'wh-filtered'); // emits skill.created
+    expect(await pollOpState(app, opId, 'ACTIVE')).toBe('ACTIVE');
+
+    await sleep(800); // give any erroneous fan-out time to fire
+    expect(sender.calls.length).toBe(0); // filtered out — no delivery
+  });
+
+  it('two concurrent reconciler sweeps re-drive an orphan exactly once (no double send)', async () => {
+    const endpointsStore = createWebhookEndpointsStore(createDb(getPool()));
+    await endpointsStore.create({ id: 'whe_2rec', url: 'https://hooks.example.com/in', secret: 's', eventTypes: null });
+    await endpointsStore.recordDelivery({ id: 'whd_2rec', endpointId: 'whe_2rec', eventType: 'skill.created', payload: { k: 1 } });
+    await getPool().query("UPDATE webhook_deliveries SET create_time = now() - interval '5 minutes' WHERE id = 'whd_2rec'");
+
+    const reconciler = createWebhookReconciler({ endpointsStore, queue: boss, logger: createNoopLogger() });
+    const [a, b] = await Promise.all([reconciler.runOnce(), reconciler.runOnce()]);
+    expect(a + b).toBe(1); // claimed by exactly one sweep — no double-claim
+
+    await waitFor(async () => (await deliveryRow('whd_2rec'))?.delivered_at !== null);
+    const sends = sender.calls.filter((c) => c.headers['webhook-id'] === 'whd_2rec');
+    expect(sends.length).toBe(1); // delivered exactly once
+  });
+
+  it('reconciler re-drives a STUCK (enqueued but non-terminal) delivery (lost DLQ event)', async () => {
+    const endpointsStore = createWebhookEndpointsStore(createDb(getPool()));
+    await endpointsStore.create({ id: 'whe_stuck', url: 'https://hooks.example.com/in', secret: 's', eventTypes: null });
+    await endpointsStore.recordDelivery({ id: 'whd_stuck', endpointId: 'whe_stuck', eventType: 'skill.created', payload: { k: 1 } });
+    await endpointsStore.stampEnqueued('whd_stuck'); // enqueued...
+    // ...but the job vanished without a terminal stamp; age it past the stuck window.
+    await getPool().query("UPDATE webhook_deliveries SET enqueued_at = now() - interval '20 minutes' WHERE id = 'whd_stuck'");
+
+    const reconciler = createWebhookReconciler({ endpointsStore, queue: boss, logger: createNoopLogger(), stuckGraceMs: 600_000 });
+    expect(await reconciler.runOnce()).toBe(1); // re-driven via the stuck sweep
+    await waitFor(async () => (await deliveryRow('whd_stuck'))?.delivered_at !== null);
+  });
 });

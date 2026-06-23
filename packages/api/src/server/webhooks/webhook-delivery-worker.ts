@@ -5,6 +5,7 @@ import { type Logger } from '../logger.js';
 import { JOB_NAMES, type WebhookDeliveryJobData, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from '../queue/queue.js';
 import { type WebhookEndpointsStore } from '../store/webhook-endpoints-store.js';
 
+import { UrlSafetyError } from './url-safety.js';
 import { signWebhookBody } from './webhook-signing.js';
 
 export interface Clock {
@@ -65,6 +66,16 @@ export function createWebhookDeliveryHandler(deps: WebhookDeliveryDeps): Webhook
       });
       status = res.status;
     } catch (err) {
+      // Target resolved to a disallowed (private/rebind) address at delivery time —
+      // a security failure, never retry; mark the delivery permanently failed.
+      if (err instanceof UrlSafetyError) {
+        await deps.endpointsStore.markFailed(data.delivery_id);
+        deps.logger.error(
+          { delivery_id: data.delivery_id, reason: err.reason },
+          'webhook target unsafe at delivery time — failed (non-retriable)',
+        );
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       deps.logger.info({ delivery_id: data.delivery_id, err: message }, 'webhook send error (will retry)');
       throw err instanceof Error ? err : new Error(message);

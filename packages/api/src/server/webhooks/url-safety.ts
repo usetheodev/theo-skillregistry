@@ -78,7 +78,31 @@ function parseAndValidateUrl(rawUrl: string): URL {
   return url;
 }
 
-async function resolveAndAssertPublic(host: string, resolver: DnsResolver): Promise<void> {
+/** Decides whether a resolved IP is allowed as an egress target. */
+export type AddressPolicy = (ip: string) => boolean;
+
+/** Default policy — only public addresses are allowed (rejects private/metadata). */
+export const publicAddressPolicy: AddressPolicy = (ip) => !isPrivateIp(ip);
+
+/**
+ * Validate a URL is safe and return the concrete resolved addresses that passed
+ * the policy. The caller PINS the connection to one of these addresses so the IP
+ * validated here is the IP actually connected to (closes the DNS-rebind TOCTOU).
+ * For an IP-literal host the address set is the literal itself.
+ */
+export async function resolveSafeAddresses(
+  rawUrl: string,
+  resolver: DnsResolver = DEFAULT_RESOLVER,
+  isAllowed: AddressPolicy = publicAddressPolicy,
+): Promise<{ url: URL; addresses: string[] }> {
+  const url = parseAndValidateUrl(rawUrl);
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(host) !== 0) {
+    if (!isAllowed(host)) {
+      throw new UrlSafetyError('private_ip', host);
+    }
+    return { url, addresses: [host] };
+  }
   const results = await Promise.allSettled([resolver.resolve4(host), resolver.resolve6(host)]);
   const ips = results
     .filter((r): r is PromiseFulfilledResult<string[]> => r.status === 'fulfilled')
@@ -87,10 +111,11 @@ async function resolveAndAssertPublic(host: string, resolver: DnsResolver): Prom
     throw new UrlSafetyError('dns_resolution_failed', host);
   }
   for (const ip of ips) {
-    if (isPrivateIp(ip)) {
+    if (!isAllowed(ip)) {
       throw new UrlSafetyError('private_ip', `${host} → ${ip}`);
     }
   }
+  return { url, addresses: ips };
 }
 
 /**
@@ -101,14 +126,5 @@ export async function assertPublicUrl(
   rawUrl: string,
   resolver: DnsResolver = DEFAULT_RESOLVER,
 ): Promise<URL> {
-  const url = parseAndValidateUrl(rawUrl);
-  const host = url.hostname.replace(/^\[|\]$/g, '');
-  if (isIP(host) !== 0) {
-    if (isPrivateIp(host)) {
-      throw new UrlSafetyError('private_ip', host);
-    }
-    return url;
-  }
-  await resolveAndAssertPublic(host, resolver);
-  return url;
+  return (await resolveSafeAddresses(rawUrl, resolver)).url;
 }

@@ -39,10 +39,12 @@ testes core 18 + api contract 34 + integração 30 (82 total), todos verdes.
 
 ## Phase 3 — Endpoints repository + CRUD (commit 22487b3)
 
-- `webhook-endpoints-store.ts` — port + adapter pg: `create`/`getPublicById`/`listPublic`/`remove`/
+- `webhook-endpoints-store.ts` — port + adapter pg num único arquivo (mesma convenção de
+  operations-store/skills-store): `create`/`getPublicById`/`listPublic`/`remove`/
   `listActiveForEvent` (filtro jsonb `@>`)/`getInternalById`/`recordDelivery`/`getDeliveryById`/
   `stampEnqueued`/`markDelivered`/`markFailed` (terminal-once)/`claimOrphanedDeliveries`
-  (`FOR UPDATE SKIP LOCKED` CTE).
+  (`FOR UPDATE SKIP LOCKED` CTE)/`listStuckDeliveries`. Retorna tipos de domínio
+  (`DeliveryRecord`) no boundary do port — sem vazar o row do ORM.
 - `handlers/webhook-endpoints.ts` — POST (valida URL via SSRF guard, segredo retornado **uma vez**),
   GET list, GET/:id, DELETE. Wired em `app.ts` com `dnsResolver` injetável.
 - Integration test: CRUD + filtro de evento + ciclo de delivery + orphan claim (7 casos).
@@ -66,9 +68,30 @@ testes core 18 + api contract 34 + integração 30 (82 total), todos verdes.
   3. 5xx → retry com backoff → entregue na recuperação.
   4. Crash-window: delivery órfão recuperado pelo reconciler e entregue.
 
+## Pós-review (hardening — BLOCKER + HIGH)
+
+Review multi-agente (5 especialistas) levantou 1 BLOCKER + HIGHs; todos endereçados:
+
+- **BLOCKER (SSRF na entrega)** — o guard SSRF rodava só na criação do endpoint, não na
+  entrega → DNS-rebind para metadata/rede interna. **Fix:** sender reescrito com
+  `node:http(s)` + `lookup` fixando a conexão no IP validado em tempo de entrega
+  (`resolveSafeAddresses` valida e devolve os IPs; o sender pina). Fecha o TOCTOU
+  (validação e conexão no mesmo IP); redirects não são seguidos; corpo drenado (sem DoS).
+  Política de egress injetável (DIP). `UrlSafetyError` na entrega → `markFailed` não-retriável.
+- **Stuck-delivery sweep (F-conc-9)** — entrega presa (enqueued sem terminal, p.ex. evento DLQ
+  perdido) era invisível ao orphan-scan. `listStuckDeliveries` + segundo varredor no reconciler
+  re-dirigem (singletonKey dedup).
+- **Tipos de domínio no port (F-arch-1)** — `DeliveryRecord` substitui o row do ORM no boundary.
+- **Testes adicionados** — DLQ exhaustion, endpoint ausente/inativo, network-error retry,
+  exclusão por event-type, 2 reconcilers sem double-send, stuck recovery, criação concorrente
+  com mesma Idempotency-Key, retry transiente, e casos de fronteira do SSRF (CGNAT/mapped/
+  unique-local/0.0.0.0/decimal/hex + contra-exemplos públicos). Total 97 testes.
+
 ## Decisões
 
 - `onTerminal` dispara em ACTIVE **e** FAILED; `state` no payload distingue o desfecho.
 - DLQ marca `failed` em retries esgotados; tabela `webhook_deliveries` é a fonte de verdade.
 - `markDelivered`/`markFailed` são terminais-uma-vez (`WHERE delivered_at IS NULL AND failed_at IS NULL`).
-- ZERO novas dependências (node:crypto/dns/net + pg-boss) — Unbreakable Rule 9.
+- Entrega é **at-least-once**; header `webhook-id` (= delivery id, estável entre retries/re-drives)
+  é a chave de dedup do lado do consumidor.
+- ZERO novas dependências (node:crypto/dns/net/http/https + pg-boss) — Unbreakable Rule 9.

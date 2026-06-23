@@ -28,6 +28,15 @@ export interface WorkerDeps {
   readonly onTerminal?: OnOperationTerminal;
 }
 
+/** Compose several terminal hooks into one (run sequentially, in order). */
+export function composeTerminalHooks(...hooks: OnOperationTerminal[]): OnOperationTerminal {
+  return async (args) => {
+    for (const hook of hooks) {
+      await hook(args);
+    }
+  };
+}
+
 function isBusinessRule(err: unknown): boolean {
   return err instanceof SkillAlreadyExistsError || err instanceof NonRetriableOperationError;
 }

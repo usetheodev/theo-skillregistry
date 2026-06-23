@@ -14,6 +14,11 @@ ao [Semantic Versioning](https://semver.org/).
 - M3: schema pgvector — coluna `vector(1536)` + tabela `embeddings` (por revisão; unique
   `(revision_id, provider, model)`; índice HNSW cosine) + coluna `skill_revisions.skill_md`
   (fonte do embedding capturada no ingest); extensão `vector` no bootstrap da migração (#6)
+- M3: geração e indexação assíncrona de embeddings — seleção de provider por env (`OPENAI_API_KEY`
+  → openai com `OPENAI_BASE_URL` opcional; senão stub) com guard de dimensão no boot; job
+  `embed_skill` disparado no terminal ACTIVE de create/update (fora do caminho da resposta);
+  embed worker gera `name+description+corpo`, valida a dimensão (fail-fast) e faz upsert idempotente
+  (`ON CONFLICT (revision_id, provider, model) DO NOTHING`); busca por similaridade cosseno consultável (#6)
 
 ### Changed
 

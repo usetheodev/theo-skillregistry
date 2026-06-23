@@ -5,6 +5,7 @@ export const JOB_NAMES = Object.freeze({
   UPDATE_SKILL: 'update_skill',
   DELETE_SKILL: 'delete_skill',
   WEBHOOK_DELIVERY: 'webhook_delivery',
+  EMBED_SKILL: 'embed_skill',
 });
 
 export const WEBHOOK_DELIVERY_DLQ_QUEUE_NAME = 'webhook_delivery_dlq';
@@ -72,3 +73,16 @@ export interface WebhookDeliveryJobData {
   readonly endpoint_id: string;
   readonly payload: Record<string, unknown>;
 }
+
+/** M3: embed the skill's CURRENT revision (worker resolves latest_revision_id). */
+export interface EmbedSkillJobData {
+  readonly skill_id: string;
+}
+
+/** Embed jobs: retry transient embedder/DB failures with backoff (2,4,8,16s). */
+export const EMBED_SKILL_SEND_OPTIONS: Readonly<
+  Pick<PgBoss.SendOptions, 'retryLimit' | 'retryDelay' | 'retryBackoff'>
+> = Object.freeze({ retryLimit: 4, retryDelay: 2, retryBackoff: true });
+
+/** Dedup window so two terminal events for the same skill collapse to one embed. */
+export const EMBED_SKILL_SINGLETON_SECONDS = 30;

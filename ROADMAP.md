@@ -189,7 +189,7 @@ vetor) com reranking e **score explícito** na resposta.
 
 ---
 
-### M5 — [ ] CLI de dev local (lint/validate/test)
+### M5 — [x] CLI de dev local (lint/validate/test)
 
 **Objective:** Dar aos autores uma CLI que valida a skill localmente antes do upload —
 capacidade que o Google não tem.

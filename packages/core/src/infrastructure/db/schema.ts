@@ -1,4 +1,5 @@
-import { customType, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { desc } from 'drizzle-orm';
+import { customType, index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
 /** Postgres `bytea` column type (Drizzle has no native helper). */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -28,14 +29,18 @@ export const skills = pgTable('skills', {
  * is stored as bytea; `content_hash` is the sha256 of the zip (integrity + dedup);
  * `frontmatter` is the parsed SKILL.md frontmatter (jsonb, unknown fields kept).
  */
-export const skillRevisions = pgTable('skill_revisions', {
-  revisionId: text('revision_id').primaryKey(),
-  skillId: text('skill_id').notNull(),
-  payload: bytea('payload').notNull(),
-  contentHash: text('content_hash').notNull(),
-  frontmatter: jsonb('frontmatter').notNull(),
-  createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
-});
+export const skillRevisions = pgTable(
+  'skill_revisions',
+  {
+    revisionId: text('revision_id').primaryKey(),
+    skillId: text('skill_id').notNull(),
+    payload: bytea('payload').notNull(),
+    contentHash: text('content_hash').notNull(),
+    frontmatter: jsonb('frontmatter').notNull(),
+    createTime: timestamp('create_time', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('skill_revisions_skill_id_create_time_idx').on(t.skillId, desc(t.createTime))],
+);
 
 /**
  * Operations — first-class long-running operation (ADR-1). pg-boss carries the

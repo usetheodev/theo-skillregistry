@@ -50,6 +50,18 @@ describe('zip guards (pure)', () => {
     expect(checkEntry(meta({ uncompressedSize: 1000, compressedSize: 1 }), false, newGuardState())).toBe('compression_ratio');
   });
 
+  it('flags too_many_entries past the entry cap', () => {
+    const state = newGuardState();
+    state.entryCount = 10_000; // MAX_ZIP_ENTRIES
+    expect(checkEntry(meta({ fileName: 'one-more.txt' }), false, state)).toBe('too_many_entries');
+  });
+
+  it('flags total_too_large past the cumulative size cap', () => {
+    const state = newGuardState();
+    state.totalUncompressed = 500 * 1024 * 1024; // MAX_UNCOMPRESSED_TOTAL_BYTES
+    expect(checkEntry(meta({ fileName: 'big.bin', uncompressedSize: 1024 }), false, state)).toBe('total_too_large');
+  });
+
   it('detects duplicate entries', () => {
     const state = newGuardState();
     expect(checkEntry(meta({ fileName: 'x' }), false, state)).toBeNull();

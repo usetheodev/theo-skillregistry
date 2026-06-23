@@ -1,6 +1,6 @@
 import { createId } from '@paralleldrive/cuid2';
 import { skillRevisions, skills } from '@usetheo/skillregistry/db';
-import { and, asc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 
 import { type Db } from '../db.js';
 import { isUniqueViolation, SkillAlreadyExistsError } from '../persistence/pg-errors.js';
@@ -88,6 +88,22 @@ export function createSkillsStore(db: Db): SkillsStore {
     async createWithRevision(input) {
       const revisionId = `rev_${createId()}`;
       await db.transaction(async (tx) => {
+        // Free an EXPIRED post-delete tombstone so the id can be recycled (the
+        // reservation window having elapsed). A live skill or a still-reserved id
+        // does not match here, so the insert below conflicts → typed error.
+        const purged = await tx
+          .delete(skills)
+          .where(
+            and(
+              eq(skills.skillId, input.skillId),
+              isNotNull(skills.deletedAt),
+              lt(skills.reservedUntil, sql`now()`),
+            ),
+          )
+          .returning({ skillId: skills.skillId });
+        if (purged.length > 0) {
+          await tx.delete(skillRevisions).where(eq(skillRevisions.skillId, input.skillId));
+        }
         try {
           await tx.insert(skills).values({
             skillId: input.skillId,

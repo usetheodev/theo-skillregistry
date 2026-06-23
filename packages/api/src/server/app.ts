@@ -15,6 +15,7 @@ import { createRevisionsStore } from './store/revisions-store.js';
 import { createSkillsStore } from './store/skills-store.js';
 
 const DEFAULT_RESERVATION_HOURS = 24;
+const DEFAULT_MAX_BODY_BYTES = 35 * 1024 * 1024; // ~25MB zip after base64 envelope
 
 export interface CreateAppOptions {
   readonly pool: Pool;
@@ -23,6 +24,7 @@ export interface CreateAppOptions {
   readonly payloadValidator?: PayloadValidator;
   readonly secretScanner?: SecretScanner;
   readonly reservationHours?: number;
+  readonly maxBodyBytes?: number;
 }
 
 /** Build the Hono app with injected dependencies (DIP, ADR-3). */
@@ -46,6 +48,7 @@ export function createApp(opts: CreateAppOptions): Hono {
     secretScanner: opts.secretScanner ?? createSecretlintScanner(),
     logger,
     reservationHours: opts.reservationHours ?? envReservationHours(),
+    maxBodyBytes: opts.maxBodyBytes ?? envMaxBodyBytes(),
   });
   registerOperationsRoutes(app, { operationsStore: createOperationsStore(db) });
 
@@ -55,4 +58,9 @@ export function createApp(opts: CreateAppOptions): Hono {
 function envReservationHours(): number {
   const raw = Number(process.env['THEOSKILL_ID_RESERVATION_HOURS'] ?? '');
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RESERVATION_HOURS;
+}
+
+function envMaxBodyBytes(): number {
+  const raw = Number(process.env['THEOSKILL_MAX_BODY_BYTES'] ?? '');
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_BODY_BYTES;
 }

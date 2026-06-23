@@ -3,7 +3,6 @@
 // Frontmatter field limits (AgentSkills spec).
 export const MAX_NAME_LENGTH = 64;
 export const MAX_DESCRIPTION_LENGTH = 1024;
-export const MAX_COMPATIBILITY_LENGTH = 500;
 
 // Zip payload guards (PRD §5.4 / Google baseline).
 export const MAX_ZIP_ENTRIES = 10_000;

@@ -173,9 +173,68 @@ describeIntegration('M1 skill ingestion E2E (T4)', () => {
       }),
     );
     expect(states.filter((s) => s === 'done')).toHaveLength(1);
-    const count = await getPool().query<{ count: string }>(
+    const skillCount = await getPool().query<{ count: string }>(
       "SELECT count(*)::text AS count FROM skills WHERE skill_id = 'race-skill'",
     );
-    expect(count.rows[0]?.count).toBe('1');
+    expect(skillCount.rows[0]?.count).toBe('1');
+    // no orphan revision: exactly one revision for the single winning skill
+    const revCount = await getPool().query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM skill_revisions WHERE skill_id = 'race-skill'",
+    );
+    expect(revCount.rows[0]?.count).toBe('1');
+  });
+
+  it('GET revision by id returns the revision; unknown/cross-skill → 404 (T4.4)', async () => {
+    app = makeApp();
+    const zip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('rev-skill') }]);
+    await pollDone(app, ((await (await postSkill(app, 'rev-skill', zip)).json()) as { operation_id: string }).operation_id);
+
+    const list = (await (await app.request('/v1/skills/rev-skill/revisions')).json()) as {
+      revisions: { revision_id: string }[];
+    };
+    const revId = list.revisions[0]?.revision_id as string;
+    const ok = await app.request(`/v1/skills/rev-skill/revisions/${revId}`);
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { revision_id: string }).revision_id).toBe(revId);
+
+    expect((await app.request('/v1/skills/rev-skill/revisions/rev_nope')).status).toBe(404);
+    // valid revision id under the WRONG skill id → 404 (cross-skill guard)
+    const otherZip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('other-skill') }]);
+    await pollDone(app, ((await (await postSkill(app, 'other-skill', otherZip)).json()) as { operation_id: string }).operation_id);
+    expect((await app.request(`/v1/skills/other-skill/revisions/${revId}`)).status).toBe(404);
+  });
+
+  it('concurrent PATCH with payloads converges to a consistent latest_revision_id (T4.3)', async () => {
+    app = makeApp();
+    const zip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('cu-skill') }]);
+    await pollDone(app, ((await (await postSkill(app, 'cu-skill', zip)).json()) as { operation_id: string }).operation_id);
+
+    const patch = async (desc: string): Promise<string> => {
+      const z = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('cu-skill', desc) }]);
+      const r = await app.request('/v1/skills/cu-skill?updateMask=zippedFilesystem', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ zippedFilesystem: z }),
+      });
+      return ((await r.json()) as { operation_id: string }).operation_id;
+    };
+    const ops = await Promise.all([patch('v-a'), patch('v-b')]);
+    await Promise.all(ops.map((op) => pollDone(app, op)));
+
+    // 1 initial + 2 update revisions; latest points at exactly one real revision
+    const revs = (await (await app.request('/v1/skills/cu-skill/revisions')).json()) as {
+      revisions: { revision_id: string }[];
+    };
+    expect(revs.revisions).toHaveLength(3);
+    const latest = ((await (await app.request('/v1/skills/cu-skill')).json()) as { latest_revision_id: string })
+      .latest_revision_id;
+    expect(revs.revisions.map((r) => r.revision_id)).toContain(latest);
+  });
+
+  it('rejects an oversized body with 413 (DoS guard)', async () => {
+    const tiny = createApp({ pool: getPool(), queue: boss, logger: createNoopLogger(), reservationHours: 1, maxBodyBytes: 64 });
+    const zip = await buildZipBase64([{ path: 'SKILL.md', content: skillMd('big-skill') }]);
+    const res = await postSkill(tiny, 'big-skill', zip);
+    expect(res.status).toBe(413);
   });
 });

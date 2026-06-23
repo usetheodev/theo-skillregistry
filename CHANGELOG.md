@@ -29,8 +29,14 @@ ao [Semantic Versioning](https://semver.org/).
 ### Removed
 
 ### Fixed
+- M1: um `skillId` deletado pode ser recriado após a janela de reserva expirar (o tombstone
+  expirado é purgado atomicamente no create) — corrige bug encontrado no `/review` que tornava
+  ids permanentemente irreutilizáveis (#4)
+- M1: índice em `skill_revisions(skill_id, create_time desc)` evita seq-scan no list de revisões (#4)
 
 ### Security
+- M1: `POST`/`PATCH /v1/skills` rejeita corpo acima do limite com `413` (guarda de DoS de
+  memória; configurável via `THEOSKILL_MAX_BODY_BYTES`) (#4)
 
 ## [0.1.0] - 2026-06-22
 

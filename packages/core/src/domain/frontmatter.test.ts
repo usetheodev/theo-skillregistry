@@ -16,9 +16,9 @@ describe('parseFrontmatter', () => {
   });
 
   it('rejects content without frontmatter (missing_frontmatter)', () => {
+    expect.assertions(2);
     try {
       parseFrontmatter('# no frontmatter here');
-      expect.unreachable('should throw');
     } catch (err) {
       expect(err).toBeInstanceOf(SkillFrontmatterError);
       expect((err as SkillFrontmatterError).code).toBe('missing_frontmatter');
@@ -55,8 +55,9 @@ describe('parseFrontmatter', () => {
   });
 
   it('rejects malformed YAML (schema_invalid)', () => {
+    expect.assertions(2);
     try {
-      parseFrontmatter('---\nname: [unclosed\n---\n');
+      parseFrontmatter('---\nname: "unclosed\n---\n');
     } catch (err) {
       expect(err).toBeInstanceOf(SkillFrontmatterError);
       expect((err as SkillFrontmatterError).code).toBe('schema_invalid');

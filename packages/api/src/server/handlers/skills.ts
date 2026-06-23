@@ -10,6 +10,7 @@ import {
   type ValidatedPayload,
 } from '@usetheo/skillregistry';
 import { type Context, type Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import type PgBoss from 'pg-boss';
 
 import { type Logger } from '../logger.js';
@@ -29,6 +30,8 @@ export interface SkillsRoutesDeps {
   readonly secretScanner: SecretScanner;
   readonly logger: Logger;
   readonly reservationHours: number;
+  /** Max inbound request body size (bytes) for payload-bearing routes (DoS guard). */
+  readonly maxBodyBytes: number;
 }
 
 interface IngestResult {
@@ -106,9 +109,39 @@ function fail(c: Context, err: unknown): Response {
   throw err;
 }
 
+/**
+ * Create the operation row, enqueue the job, and emit the runtime metric — the
+ * single mutating-LRO seam (DRY). If enqueue fails, the operation is marked
+ * `failed` immediately so it is never left stuck (no dangling CREATING).
+ */
+async function enqueueOperation(
+  deps: SkillsRoutesDeps,
+  c: Context,
+  skillId: string,
+  jobName: string,
+  jobData: Record<string, unknown>,
+  metric: Readonly<Record<string, unknown>>,
+): Promise<Response> {
+  const operationId = `op_${createId()}`;
+  await deps.operationsStore.create({ operationId, skillId, type: jobName });
+  try {
+    await deps.queue.send(jobName, { operation_id: operationId, skill_id: skillId, ...jobData }, SEND_OPTIONS);
+  } catch (err) {
+    await deps.operationsStore.updateState(operationId, 'failed', `failed to enqueue ${jobName}`);
+    throw err;
+  }
+  deps.logger.info({ operation_id: operationId, skill_id: skillId, job: jobName, ...metric }, `${jobName} enqueued`);
+  return c.json({ operation_id: operationId, skill_id: skillId }, 202);
+}
+
 export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
+  const limit = bodyLimit({
+    maxSize: deps.maxBodyBytes,
+    onError: (c) => c.json({ error: 'payload_too_large' }, 413),
+  });
+
   // POST /v1/skills — validate payload at the boundary, enqueue, 202.
-  app.post('/v1/skills', async (c) => {
+  app.post('/v1/skills', limit, async (c) => {
     let skillId: string;
     let ingest: IngestResult;
     try {
@@ -128,28 +161,20 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       return fail(c, err);
     }
 
-    const operationId = `op_${createId()}`;
-    await deps.operationsStore.create({ operationId, skillId, type: JOB_NAMES.CREATE_SKILL });
-    try {
-      await deps.queue.send(
-        JOB_NAMES.CREATE_SKILL,
-        {
-          operation_id: operationId,
-          skill_id: skillId,
-          name: ingest.name,
-          description: ingest.description,
-          content_hash: ingest.validated.contentHash,
-          payload_b64: ingest.buffer.toString('base64'),
-          frontmatter: ingest.frontmatter,
-        },
-        SEND_OPTIONS,
-      );
-    } catch (err) {
-      await deps.operationsStore.updateState(operationId, 'failed', 'failed to enqueue create_skill job');
-      throw err;
-    }
-    deps.logger.info({ operation_id: operationId, skill_id: skillId }, 'create_skill enqueued');
-    return c.json({ operation_id: operationId, skill_id: skillId }, 202);
+    return enqueueOperation(
+      deps,
+      c,
+      skillId,
+      JOB_NAMES.CREATE_SKILL,
+      {
+        name: ingest.name,
+        description: ingest.description,
+        content_hash: ingest.validated.contentHash,
+        payload_b64: ingest.buffer.toString('base64'),
+        frontmatter: ingest.frontmatter,
+      },
+      { entry_count: ingest.validated.entryCount },
+    );
   });
 
   // GET /v1/skills — keyset-paginated list of live skills.
@@ -171,7 +196,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
   });
 
   // PATCH /v1/skills/:id — updateMask-driven; LRO when a payload is present.
-  app.patch('/v1/skills/:id', async (c) => {
+  app.patch('/v1/skills/:id', limit, async (c) => {
     const skillId = c.req.param('id');
     if ((await deps.skillsStore.getView(skillId)) === undefined) {
       return c.json({ error: 'not_found' }, 404);
@@ -200,13 +225,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       }
     }
 
-    const operationId = `op_${createId()}`;
-    await deps.operationsStore.create({ operationId, skillId, type: JOB_NAMES.UPDATE_SKILL });
-    const jobData: Record<string, unknown> = {
-      operation_id: operationId,
-      skill_id: skillId,
-      mask,
-    };
+    const jobData: Record<string, unknown> = { mask };
     if (mask.includes('displayName') && typeof body.displayName === 'string') {
       jobData['name'] = body.displayName;
     }
@@ -218,9 +237,7 @@ export function registerSkillsRoutes(app: Hono, deps: SkillsRoutesDeps): void {
       jobData['payload_b64'] = ingest.buffer.toString('base64');
       jobData['frontmatter'] = ingest.frontmatter;
     }
-    await deps.queue.send(JOB_NAMES.UPDATE_SKILL, jobData, SEND_OPTIONS);
-    deps.logger.info({ operation_id: operationId, skill_id: skillId, mask }, 'update_skill enqueued');
-    return c.json({ operation_id: operationId, skill_id: skillId }, 202);
+    return enqueueOperation(deps, c, skillId, JOB_NAMES.UPDATE_SKILL, jobData, { mask });
   });
 
   // DELETE /v1/skills/:id — soft-delete + id reservation (synchronous).

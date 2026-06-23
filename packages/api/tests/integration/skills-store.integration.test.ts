@@ -97,6 +97,26 @@ describeIntegration('skills + revisions stores (T3.2)', () => {
     expect(await skills.isReserved('other')).toBe(false);
   });
 
+  it('an id can be recreated after the reservation window expires (was a BLOCKER)', async () => {
+    const skills = createSkillsStore(createDb(getPool()));
+    const revisions = createRevisionsStore(createDb(getPool()));
+    await skills.createWithRevision(newRev('recyclable', 'First'));
+    await skills.softDelete('recyclable', new Date(Date.now() - 1000)); // already expired
+    expect(await skills.isReserved('recyclable')).toBe(false);
+
+    // recreate must SUCCEED and start fresh (no stale revisions)
+    await skills.createWithRevision(newRev('recyclable', 'Second'));
+    const view = await skills.getView('recyclable');
+    expect(view?.name).toBe('Second');
+    expect(view?.state).toBe('ACTIVE');
+    expect(await revisions.listBySkill('recyclable')).toHaveLength(1); // old revision purged
+
+    // still blocked while a reservation is active
+    await skills.createWithRevision(newRev('locked'));
+    await skills.softDelete('locked', new Date(Date.now() + 3600_000));
+    await expect(skills.createWithRevision(newRev('locked'))).rejects.toBeInstanceOf(SkillAlreadyExistsError);
+  });
+
   it('concurrent createWithRevision same skill_id is a race resolved to one winner', async () => {
     const skills = createSkillsStore(createDb(getPool()));
     const results = await Promise.allSettled([

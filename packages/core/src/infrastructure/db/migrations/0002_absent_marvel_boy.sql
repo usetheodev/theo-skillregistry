@@ -1,0 +1,1 @@
+CREATE INDEX "skill_revisions_skill_id_create_time_idx" ON "skill_revisions" USING btree ("skill_id","create_time" desc);

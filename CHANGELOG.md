@@ -13,6 +13,12 @@ ao [Semantic Versioning](https://semver.org/).
 - M1: validação rígida de payload zip via `yauzl` (limites, path traversal, symlink, ratio,
   profundidade, duplicados, `SKILL.md` na raiz) — zip-bomb safe (guardas por metadados) (#4)
 - M1: secret scan do payload via `secretlint` (preset-recommend, in-memory; nunca expõe o valor) (#4)
+- M1: revisões imutáveis de skill (`skill_revisions` com payload bytea + content_hash sha256 +
+  frontmatter jsonb); `skills.latest_revision_id` aponta para a corrente (#4)
+- M1: CRUD completo — `POST /v1/skills` (ingere+valida payload na fronteira),
+  `GET /v1/skills/{id}`, `GET /v1/skills` (paginado por keyset), `PATCH /v1/skills/{id}`
+  (updateMask; nova revisão quando há payload), `DELETE /v1/skills/{id}` + reserva de skillId
+  com janela configurável (`THEOSKILL_ID_RESERVATION_HOURS`), `GET .../revisions[/{id}]` (#4)
 
 ### Changed
 - M1: parser YAML do frontmatter usa `yaml` (eemeli, ISC) em vez de `gray-matter` — este fixa

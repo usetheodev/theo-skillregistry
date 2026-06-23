@@ -12,6 +12,7 @@ ao [Semantic Versioning](https://semver.org/).
 - M9: rastreabilidade ponta-a-ponta — um `trace_id` (W3C `traceparent`-compatível) é originado na fronteira HTTP (ou gerado quando ausente/malformado) e propagado por operação → job → webhook, logado em cada salto e persistido na delivery row (sobrevive ao re-enqueue do reconciler). Seam mínimo (`node:crypto`, sem SDK OpenTelemetry — o M8 adota e adiciona exporters) (#9)
 
 ### Changed
+- M9: backoff de entrega de webhook agora é uma política explícita (`WEBHOOK_DELIVERY_BACKOFF`: exponencial + full jitter, base 2s, cap 5min, 5 tentativas) com função pura testável (`computeBackoff`), em vez de números mágicos inline; o pg-boss aplica o exponencial derivado da política (#9)
 - Template de instalação (`.claude/settings.json`): `permissions.defaultMode` passa a `bypassPermissions` e `pnpm`/`npm`/`npx`/`pnpx`/`yarn`/`node`/`corepack` movidos de `ask` para `allow` (lista `ask` esvaziada) — Claude Code deixa de pedir confirmação por padrão; os `deny` destrutivos (rm -rf de paths de sistema, sudo, git checkout/reset --hard/push --force/rebase -i, leitura de `.env`/secrets) permanecem como guarda-corpo
 
 ### Deprecated

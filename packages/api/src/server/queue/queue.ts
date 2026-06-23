@@ -1,5 +1,7 @@
 import PgBoss from 'pg-boss';
 
+import { toPgBossRetry, WEBHOOK_DELIVERY_BACKOFF } from '../resilience/backoff.js';
+
 export const JOB_NAMES = Object.freeze({
   CREATE_SKILL: 'create_skill',
   UPDATE_SKILL: 'update_skill',
@@ -18,13 +20,12 @@ export const SKILL_SEND_OPTIONS: Readonly<
   Pick<PgBoss.SendOptions, 'retryLimit' | 'retryDelay' | 'retryBackoff'>
 > = Object.freeze({ retryLimit: MAX_SKILL_RETRY, retryDelay: 2, retryBackoff: true });
 
-/** Webhook delivery: 5 retries with backoff (2,4,8,16,32s) then dead-letter. */
+/** Webhook delivery retry: derived from the explicit WEBHOOK_DELIVERY_BACKOFF policy
+ * (ADR-2) instead of inline magic numbers, then dead-letter. */
 export const WEBHOOK_DELIVERY_SEND_OPTIONS: Readonly<
   Pick<PgBoss.SendOptions, 'retryLimit' | 'retryDelay' | 'retryBackoff' | 'expireInSeconds' | 'deadLetter'>
 > = Object.freeze({
-  retryLimit: 5,
-  retryDelay: 2,
-  retryBackoff: true,
+  ...toPgBossRetry(WEBHOOK_DELIVERY_BACKOFF),
   expireInSeconds: 60,
   deadLetter: WEBHOOK_DELIVERY_DLQ_QUEUE_NAME,
 });

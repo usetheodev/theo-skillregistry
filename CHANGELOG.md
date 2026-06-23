@@ -8,8 +8,15 @@ ao [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- M1: parser de frontmatter `SKILL.md` compatível com o Theokit (lib `yaml`/eemeli; campos
+  obrigatórios name+description; limites AgentSkills; preserva campos desconhecidos) (#4)
+- M1: validação rígida de payload zip via `yauzl` (limites, path traversal, symlink, ratio,
+  profundidade, duplicados, `SKILL.md` na raiz) — zip-bomb safe (guardas por metadados) (#4)
+- M1: secret scan do payload via `secretlint` (preset-recommend, in-memory; nunca expõe o valor) (#4)
 
 ### Changed
+- M1: parser YAML do frontmatter usa `yaml` (eemeli, ISC) em vez de `gray-matter` — este fixa
+  `js-yaml` 3.x, afetado pela CVE GHSA-h67p-54hq-rp68 (DoS quadrático), sem upgrade seguro (#4)
 
 ### Deprecated
 

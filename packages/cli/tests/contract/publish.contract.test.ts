@@ -27,16 +27,65 @@ const jsonRes = (status: number, body: unknown) =>
   ({ status, json: () => Promise.resolve(body) }) as unknown as Response;
 
 describe('runPublish', () => {
-  it('POSTs a new skill (GET 404 → POST 202) and prints the operation id', async () => {
+  it('POSTs a new skill (GET 404 → POST 202) with the correct body, prints the operation id', async () => {
     const buf = await valid();
+    let postBody: { skill_id?: string; zippedFilesystem?: string } | undefined;
     const fetch = vi.fn((url: string, init?: RequestInit) => {
       if (init?.method === undefined || init.method === 'GET') return Promise.resolve(jsonRes(404, {}));
+      postBody = JSON.parse(init.body as string) as typeof postBody;
       return Promise.resolve(jsonRes(202, { operation_id: 'op_123' }));
     }) as unknown as typeof globalThis.fetch;
     const { out, lines } = capture();
     const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
     expect(code).toBe(0);
     expect(lines.join('\n')).toMatch(/published.*created.*op_123/);
+    expect(postBody).toEqual({ skill_id: 'my-skill', zippedFilesystem: buf.toString('base64') }); // body shape
+  });
+
+  it('PATCH body carries only zippedFilesystem + updateMask (no skill_id)', async () => {
+    const buf = await valid();
+    let patchUrl: string | undefined;
+    let patchBody: Record<string, unknown> | undefined;
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === undefined || init.method === 'GET') return Promise.resolve(jsonRes(200, { skill_id: 'my-skill' }));
+      patchUrl = url;
+      patchBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return Promise.resolve(jsonRes(202, { operation_id: 'op_p' }));
+    }) as unknown as typeof globalThis.fetch;
+    const { out } = capture();
+    await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(patchUrl).toContain('updateMask=zippedFilesystem');
+    expect(patchBody).toEqual({ zippedFilesystem: buf.toString('base64') });
+    expect(patchBody).not.toHaveProperty('skill_id');
+  });
+
+  it('falls back to PATCH when POST races a concurrent create (409 → update)', async () => {
+    const buf = await valid();
+    const methods: string[] = [];
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      const m = init?.method ?? 'GET';
+      methods.push(m);
+      if (m === 'GET') return Promise.resolve(jsonRes(404, {})); // looked absent...
+      if (m === 'POST') return Promise.resolve(jsonRes(409, { error: 'already_exists' })); // ...but created in between
+      return Promise.resolve(jsonRes(202, { operation_id: 'op_race' })); // PATCH succeeds
+    }) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(0);
+    expect(methods).toEqual(['GET', 'POST', 'PATCH']);
+    expect(lines.join('\n')).toMatch(/updated.*op_race/);
+  });
+
+  it('returns 1 with a clear message on a non-202 registry response', async () => {
+    const buf = await valid();
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === undefined || init.method === 'GET') return Promise.resolve(jsonRes(404, {}));
+      return Promise.resolve(jsonRes(400, { error: 'invalid_zip' }));
+    }) as unknown as typeof globalThis.fetch;
+    const { out, lines } = capture();
+    const code = await runPublish(args(), { validation, out, fetch, package: () => Promise.resolve(buf) });
+    expect(code).toBe(1);
+    expect(lines.join('\n')).toMatch(/registry rejected.*HTTP 400.*invalid_zip/);
   });
 
   it('PATCHes an existing skill (GET 200 → PATCH 202)', async () => {

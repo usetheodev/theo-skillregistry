@@ -12,7 +12,6 @@ export default defineConfig({
       '@usetheo/skillregistry/db': `${coreSrc}/infrastructure/db/schema.ts`,
       '@usetheo/skillregistry': `${coreSrc}/index.ts`,
       '@usetheo/skillregistry-api/validators': `${apiSrc}/validators.ts`,
-      '@usetheo/skillregistry-api/app': `${apiSrc}/server/app.ts`,
     },
   },
   test: {

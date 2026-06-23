@@ -3,7 +3,13 @@ import { join, posix, relative, sep } from 'node:path';
 
 import yazl from 'yazl';
 
-/** Recursively collect file paths under `dir` (skips nothing — the server guards). */
+/**
+ * Recursively collect REGULAR file paths under `dir`. Symlinks are intentionally
+ * skipped (a Dirent for a symlink is neither isFile nor isDirectory), so a
+ * malicious `ln -s /etc/passwd` inside a skill dir is never packaged or uploaded
+ * — the walk cannot escape `dir`. The server's yauzl `symlink` guard is the
+ * second line of defence on ingest.
+ */
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
   const entries = await readdir(dir, { withFileTypes: true });
@@ -14,6 +20,7 @@ async function walk(dir: string): Promise<string[]> {
     } else if (e.isFile()) {
       out.push(full);
     }
+    // symlinks (and other special entries) are deliberately omitted — see docstring.
   }
   return out;
 }

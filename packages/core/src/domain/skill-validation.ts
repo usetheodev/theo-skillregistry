@@ -1,7 +1,7 @@
 /**
  * Single source of truth for skill-payload validation (M5). The server boundary
  * (`ingestPayload`) AND the dev CLI both call this so their checks can never
- * diverge (DRY — ROADMAP M5 risk #1). Runs the four checks in order:
+ * diverge (DRY — ROADMAP M5 risk #1). Runs the three checks in order:
  *   1. zip-safety  (PayloadValidator → yauzl: limits, traversal, symlink, ratio)
  *   2. frontmatter (parseFrontmatter: Theokit name/description rules)
  *   3. secret scan (SecretScanner → secretlint preset-recommend)

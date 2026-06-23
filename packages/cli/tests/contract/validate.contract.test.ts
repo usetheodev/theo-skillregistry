@@ -6,16 +6,17 @@ import { runValidate } from '../../src/commands/validate.js';
 
 const validation = { payloadValidator: createYauzlPayloadValidator(), secretScanner: createSecretlintScanner() };
 
-function zip(content: string): Promise<Buffer> {
+function zipEntries(entries: readonly { name: string; content: string }[]): Promise<Buffer> {
   return new Promise((resolve) => {
     const z = new yazl.ZipFile();
-    z.addBuffer(Buffer.from(content, 'utf8'), 'SKILL.md');
+    for (const e of entries) z.addBuffer(Buffer.from(e.content, 'utf8'), e.name);
     z.end();
     const chunks: Buffer[] = [];
     z.outputStream.on('data', (c: Buffer) => chunks.push(c));
     z.outputStream.on('end', () => resolve(Buffer.concat(chunks)));
   });
 }
+const zip = (content: string): Promise<Buffer> => zipEntries([{ name: 'SKILL.md', content }]);
 
 function capture(): { out: (l: string) => void; lines: string[] } {
   const lines: string[] = [];
@@ -37,6 +38,20 @@ describe('runValidate', () => {
     const code = await runValidate('skill', { validation, out, package: () => Promise.resolve(buf) });
     expect(code).toBe(1);
     expect(lines.join('\n')).toContain('[schema_invalid]');
+  });
+
+  it('returns 1 and prints secret_detected (with a detail line) for a secret-bearing skill', async () => {
+    // valid frontmatter, but a config file carries a GitHub token → secret scan (real secretlint) fires
+    const buf = await zipEntries([
+      { name: 'SKILL.md', content: `---\nname: my-skill\ndescription: a useful skill\n---\n# my-skill\n` },
+      { name: 'config.env', content: 'GITHUB_TOKEN=ghp_0123456789abcdefghijklmnopqrstuvwx12\n' },
+    ]);
+    const { out, lines } = capture();
+    const code = await runValidate('skill', { validation, out, package: () => Promise.resolve(buf) });
+    expect(code).toBe(1);
+    const text = lines.join('\n');
+    expect(text).toContain('[secret_detected]');
+    expect(text).toMatch(/·.*config\.env/); // per-finding detail line printed
   });
 
   it('returns 2 when no path is given', async () => {

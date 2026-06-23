@@ -70,12 +70,14 @@ describeIt('M5 CLI E2E: validate → publish → retrieve (T4.1)', () => {
   it('publishing an UPDATE creates a second revision', async () => {
     const out = (): void => undefined;
     await runPublish({ command: 'publish', path: dir, registry: 'http://local', skillId: 'pdf-tool' }, { validation, out, fetch: reg.fetch });
-    // wait for create
-    for (let i = 0; i < 200; i++) {
-      const r = (await reg.fetch('http://local/v1/skills/pdf-tool')).status;
-      if (r === 200) break;
-      await sleep(50);
+    // wait for the create to complete — fail loudly if it never does
+    let createStatus = 0;
+    for (let i = 0; i < 200 && createStatus !== 200; i++) {
+      createStatus = (await reg.fetch('http://local/v1/skills/pdf-tool')).status;
+      if (createStatus !== 200) await sleep(50);
     }
+    expect(createStatus).toBe(200);
+
     // second publish → PATCH (update)
     await writeFile(join(dir, 'SKILL.md'), `---\nname: pdf-tool\ndescription: summarizes and condenses pdf documents v2\n---\n# pdf-tool\n\nv2 body\n`);
     const lines: string[] = [];
@@ -85,6 +87,15 @@ describeIt('M5 CLI E2E: validate → publish → retrieve (T4.1)', () => {
     );
     expect(code, lines.join('\n')).toBe(0);
     expect(lines.join('\n')).toMatch(/updated/);
+
+    // verify a SECOND revision actually exists in the registry (not just the CLI message)
+    let count = 0;
+    for (let i = 0; i < 200 && count < 2; i++) {
+      const r = (await (await reg.fetch('http://local/v1/skills/pdf-tool/revisions')).json()) as { revisions: unknown[] };
+      count = r.revisions.length;
+      if (count < 2) await sleep(50);
+    }
+    expect(count).toBe(2);
     await rm(dir, { recursive: true, force: true });
   });
 });

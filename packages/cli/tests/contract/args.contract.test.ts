@@ -25,4 +25,12 @@ describe('parseCliArgs', () => {
   it('throws CliUsageError on an unknown command', () => {
     expect(() => parseCliArgs(['frobnicate'])).toThrow(CliUsageError);
   });
+
+  it('parses publish WITHOUT flags (missing-flags is enforced at runtime, not parse)', () => {
+    expect(parseCliArgs(['publish', './s'])).toEqual({ command: 'publish', path: './s' });
+  });
+
+  it('throws on an unknown flag', () => {
+    expect(() => parseCliArgs(['validate', './s', '--bogus', 'x'])).toThrow();
+  });
 });

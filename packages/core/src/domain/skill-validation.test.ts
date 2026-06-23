@@ -51,4 +51,10 @@ describe('validateSkillPayload (shared server+CLI checker)', () => {
     const r = await validateSkillPayload(Buffer.from('z'), { payloadValidator: throwingValidator('missing_skill_md'), secretScanner: findsSecret });
     expect(r).toMatchObject({ ok: false, code: 'missing_skill_md' }); // not secret/frontmatter
   });
+
+  it('runs checks in order: frontmatter BEFORE secret (frontmatter error wins)', async () => {
+    const badMd = `---\nname: Invalid Name\ndescription: x\n---\n# x\n`;
+    const r = await validateSkillPayload(Buffer.from('z'), { payloadValidator: okValidator(badMd), secretScanner: findsSecret });
+    expect(r).toMatchObject({ ok: false, code: 'schema_invalid' }); // not secret_detected
+  });
 });

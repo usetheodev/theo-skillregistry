@@ -43,19 +43,29 @@ export async function runPublish(args: ParsedCli, deps: PublishDeps): Promise<nu
   }
 
   const zippedFilesystem = buffer.toString('base64');
+  const skillId = args.skillId;
+  const post = (): Promise<Response> =>
+    deps.fetch(`${base}/v1/skills`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ skill_id: skillId, zippedFilesystem }),
+    });
+  const patch = (): Promise<Response> =>
+    deps.fetch(`${base}/v1/skills/${skillId}?updateMask=zippedFilesystem`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ zippedFilesystem }),
+    });
+
   try {
-    const exists = await skillExists(deps.fetch, base, args.skillId);
-    const res = exists
-      ? await deps.fetch(`${base}/v1/skills/${args.skillId}?updateMask=zippedFilesystem`, {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ zippedFilesystem }),
-        })
-      : await deps.fetch(`${base}/v1/skills`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ skill_id: args.skillId, zippedFilesystem }),
-        });
+    let isUpdate = await skillExists(deps.fetch, base, skillId);
+    let res = isUpdate ? await patch() : await post();
+    // Collapse the GET→POST race: if the skill was created in between, POST 409s →
+    // transparently fall back to an update.
+    if (!isUpdate && res.status === 409) {
+      isUpdate = true;
+      res = await patch();
+    }
 
     if (res.status !== 202) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -63,7 +73,7 @@ export async function runPublish(args: ParsedCli, deps: PublishDeps): Promise<nu
       return 1;
     }
     const { operation_id } = (await res.json()) as { operation_id: string };
-    deps.out(`published: ${args.skillId} (${exists ? 'updated' : 'created'}) — operation ${operation_id}`);
+    deps.out(`published: ${skillId} (${isUpdate ? 'updated' : 'created'}) — operation ${operation_id}`);
     return 0;
   } catch (err) {
     deps.out(`error: could not reach the registry at ${base}: ${err instanceof Error ? err.message : String(err)}`);

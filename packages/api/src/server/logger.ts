@@ -8,14 +8,35 @@ export interface Logger {
 const SENSITIVE_KEYS = new Set(['authorization', 'password', 'token', 'secret']);
 const SENSITIVE_SUFFIXES = ['_token', '_secret', '_key', '_password'];
 
+function isSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return SENSITIVE_KEYS.has(lower) || SENSITIVE_SUFFIXES.some((s) => lower.endsWith(s));
+}
+
+/** A plain object we should recurse into — NOT an array, Date, null, or class instance. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
 /** Redact values whose key is sensitive — exact match OR sensitive suffix (case-insensitive).
+ * Recurses into plain-object values (bounded by the object's own depth — simpler than a depth
+ * counter) so a nested sensitive key is also redacted; arrays, Date, null are left intact.
  * `secret_findings` (diagnostic finding TYPES, not values) is intentionally NOT matched. */
 function scrubFields(fields: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(fields)) {
-    const lower = key.toLowerCase();
-    const sensitive = SENSITIVE_KEYS.has(lower) || SENSITIVE_SUFFIXES.some((s) => lower.endsWith(s));
-    out[key] = sensitive ? '[REDACTED]' : value;
+    if (isSensitiveKey(key)) {
+      out[key] = '[REDACTED]';
+    } else if (isPlainObject(value)) {
+      out[key] = scrubFields(value);
+    } else {
+      out[key] = value;
+    }
   }
   return out;
 }

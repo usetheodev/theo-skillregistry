@@ -38,4 +38,27 @@ describe('createJsonLogger — sensitive-field scrubbing (T1.1 / gap #2)', () =>
     expect(out).toContain('config.env');
     expect(out).not.toContain('[REDACTED]');
   });
+
+  it('redacts_nested_sensitive_key', () => {
+    const out = captureInfo({ context: { authorization: 'Bearer abc' } });
+    expect(out).toContain('[REDACTED]');
+    expect(out).not.toContain('abc');
+  });
+
+  it('preserves_nested_benign_field', () => {
+    const out = captureInfo({ context: { skill_id: 'pdf' } });
+    expect(out).toContain('"skill_id":"pdf"');
+  });
+
+  it('does_not_mangle_array_or_date_values', () => {
+    // arrays and Date must not be recursed into / turned into objects
+    const out = captureInfo({ items: ['a', 'b'], when: new Date('2026-01-01T00:00:00.000Z') });
+    expect(out).toContain('["a","b"]');
+    expect(out).toContain('2026-01-01T00:00:00.000Z');
+  });
+
+  it('handles_null_field_value', () => {
+    const out = captureInfo({ maybe: null });
+    expect(out).toContain('"maybe":null');
+  });
 });

@@ -18,6 +18,7 @@ ao [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 ### Security
+- O scrubbing do logger passa a recursar em valores-objeto (um segredo aninhado num campo, ex. `{ context: { authorization } }`, agora também é redigido); arrays/Date/null preservados (#10)
 
 ## [0.7.0] - 2026-06-24
 

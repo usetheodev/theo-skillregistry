@@ -15,14 +15,6 @@ import {
   resolveSafeAddresses,
 } from './url-safety.js';
 
-export interface Clock {
-  now(): number;
-}
-
-export const realClock: Clock = {
-  now: () => Math.floor(Date.now() / 1000),
-};
-
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface CreateHttpWebhookSenderOptions {

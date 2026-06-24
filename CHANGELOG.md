@@ -19,6 +19,20 @@ ao [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+## [0.7.1] - 2026-06-24
+
+### Changed
+- `Clock` (wall-clock `now(): Date`) consolidado num módulo único `api/server/time/clock.ts`, reusado pelos 3 webhook workers (DRY); o clock de latência do retrieve (`now(): number` monotônico) fica interno e renomeado para evitar confusão (#10)
+
+
+### Removed
+- Dependências mortas removidas: `@paralleldrive/cuid2` do `core` (não usado lá; o `api` usa+declara) e `zod` do `api` (os schemas vêm via `@usetheo/skillregistry/contract`); export morto `realClock` (#10)
+
+
+### Security
+- O scrubbing do logger passa a recursar em valores-objeto (um segredo aninhado num campo, ex. `{ context: { authorization } }`, agora também é redigido); arrays/Date/null preservados (#10)
+- O logger é fire-and-forget: um campo patológico (referência circular, BigInt, `toJSON` que lança) NUNCA derruba o caller — emite uma linha mínima segura com `log_serialization_error` em vez de propagar (#10)
+
 ## [0.7.0] - 2026-06-24
 
 ### Added

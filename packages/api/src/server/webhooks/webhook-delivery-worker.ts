@@ -4,15 +4,10 @@ import type PgBoss from 'pg-boss';
 import { type Logger } from '../logger.js';
 import { JOB_NAMES, type WebhookDeliveryJobData, WEBHOOK_DELIVERY_DLQ_QUEUE_NAME } from '../queue/queue.js';
 import { type WebhookEndpointsStore } from '../store/webhook-endpoints-store.js';
+import { type Clock, systemClock } from '../time/clock.js';
 
 import { UrlSafetyError } from './url-safety.js';
 import { signWebhookBody } from './webhook-signing.js';
-
-export interface Clock {
-  now(): Date;
-}
-
-const systemClock: Clock = { now: () => new Date() };
 
 export interface WebhookDeliveryDeps {
   readonly endpointsStore: WebhookEndpointsStore;

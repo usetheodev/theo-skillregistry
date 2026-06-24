@@ -8,12 +8,7 @@ import {
   WEBHOOK_DELIVERY_SINGLETON_SECONDS,
 } from '../queue/queue.js';
 import { type WebhookEndpointsStore } from '../store/webhook-endpoints-store.js';
-
-export interface Clock {
-  now(): Date;
-}
-
-const systemClock: Clock = { now: () => new Date() };
+import { type Clock, systemClock } from '../time/clock.js';
 
 const DEFAULT_GRACE_MS = 60_000;
 const DEFAULT_STUCK_GRACE_MS = 600_000; // 10 min ≫ full retry span (avoid racing live retries)

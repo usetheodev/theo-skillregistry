@@ -10,13 +10,8 @@ import {
   WEBHOOK_DELIVERY_SINGLETON_SECONDS,
 } from '../queue/queue.js';
 import { type WebhookEndpointsStore } from '../store/webhook-endpoints-store.js';
+import { type Clock, systemClock } from '../time/clock.js';
 import { type OnOperationTerminal } from '../worker.js';
-
-export interface Clock {
-  now(): Date;
-}
-
-const systemClock: Clock = { now: () => new Date() };
 
 export interface WebhookEnqueuerDeps {
   readonly endpointsStore: WebhookEndpointsStore;

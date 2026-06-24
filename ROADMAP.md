@@ -269,7 +269,7 @@ SLO e cobertura E2E.
 
 ---
 
-### M9 — [ ] Fechar todos os gaps do cross-validation (engenharia)
+### M9 — [x] Fechar todos os gaps do cross-validation (engenharia)
 
 **Objective:** Fechar os 7 gaps de disciplina de engenharia levantados pelo `/loop-cross-validation`
 contra o `agentic-context-engine` (ACE) em 2026-06-23 — levar os dois únicos eixos abaixo de 4/5

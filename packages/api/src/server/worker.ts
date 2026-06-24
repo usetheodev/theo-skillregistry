@@ -17,6 +17,8 @@ import { type SkillsStore } from './store/skills-store.js';
 export type OnOperationTerminal = (args: {
   readonly operationId: string;
   readonly skillId: string;
+  /** M9: correlation id carried from the job so the webhook hop keeps the same trace. */
+  readonly traceId: string;
   readonly eventType: WebhookEventType;
   readonly state: 'ACTIVE' | 'FAILED';
 }) => Promise<void>;
@@ -51,6 +53,7 @@ async function runOperationJob(
   jobName: string,
   operationId: string,
   skillId: string,
+  traceId: string,
   eventType: WebhookEventType,
   retryCount: number,
   action: () => Promise<void>,
@@ -66,18 +69,18 @@ async function runOperationJob(
   try {
     await action();
     await deps.operationsStore.updateState(operationId, 'ACTIVE');
-    deps.logger.info({ operation_id: operationId, skill_id: skillId, state: 'ACTIVE', job: jobName }, `${jobName} done`);
-    await deps.onTerminal?.({ operationId, skillId, eventType, state: 'ACTIVE' });
+    deps.logger.info({ operation_id: operationId, skill_id: skillId, trace_id: traceId, state: 'ACTIVE', job: jobName }, `${jobName} done`);
+    await deps.onTerminal?.({ operationId, skillId, traceId, eventType, state: 'ACTIVE' });
   } catch (err) {
     const lastAttempt = retryCount >= MAX_SKILL_RETRY;
     if (isBusinessRule(err) || lastAttempt) {
       const message = err instanceof Error ? err.message : String(err);
       await deps.operationsStore.updateState(operationId, 'FAILED', message);
       deps.logger.error(
-        { operation_id: operationId, skill_id: skillId, state: 'FAILED', error: message, job: jobName },
+        { operation_id: operationId, skill_id: skillId, trace_id: traceId, state: 'FAILED', error: message, job: jobName },
         `${jobName} failed`,
       );
-      await deps.onTerminal?.({ operationId, skillId, eventType, state: 'FAILED' });
+      await deps.onTerminal?.({ operationId, skillId, traceId, eventType, state: 'FAILED' });
       return; // no (further) retry
     }
     throw err; // transient — pg-boss retries with backoff
@@ -88,7 +91,7 @@ export function createCreateSkillHandler(
   deps: WorkerDeps,
 ): (data: CreateSkillJobData, retryCount: number) => Promise<void> {
   return (data, retryCount) =>
-    runOperationJob(deps, JOB_NAMES.CREATE_SKILL, data.operation_id, data.skill_id, 'skill.created', retryCount, async () => {
+    runOperationJob(deps, JOB_NAMES.CREATE_SKILL, data.operation_id, data.skill_id, data.trace_id, 'skill.created', retryCount, async () => {
       await deps.skillsStore.createWithRevision({
         skillId: data.skill_id,
         name: data.name,
@@ -105,7 +108,7 @@ export function createUpdateSkillHandler(
   deps: WorkerDeps,
 ): (data: UpdateSkillJobData, retryCount: number) => Promise<void> {
   return (data, retryCount) =>
-    runOperationJob(deps, JOB_NAMES.UPDATE_SKILL, data.operation_id, data.skill_id, 'skill.updated', retryCount, async () => {
+    runOperationJob(deps, JOB_NAMES.UPDATE_SKILL, data.operation_id, data.skill_id, data.trace_id, 'skill.updated', retryCount, async () => {
       const meta: { name?: string; description?: string } = {};
       if (data.mask.includes('displayName') && data.name !== undefined) {
         meta.name = data.name;
@@ -136,7 +139,7 @@ export function createDeleteSkillHandler(
   deps: WorkerDeps,
 ): (data: DeleteSkillJobData, retryCount: number) => Promise<void> {
   return (data, retryCount) =>
-    runOperationJob(deps, JOB_NAMES.DELETE_SKILL, data.operation_id, data.skill_id, 'skill.deleted', retryCount, async () => {
+    runOperationJob(deps, JOB_NAMES.DELETE_SKILL, data.operation_id, data.skill_id, data.trace_id, 'skill.deleted', retryCount, async () => {
       // Idempotent: softDelete returning false (already deleted) is success.
       await deps.skillsStore.softDelete(data.skill_id, new Date(data.reserved_until));
     });

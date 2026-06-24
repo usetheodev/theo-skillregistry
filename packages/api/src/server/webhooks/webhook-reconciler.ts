@@ -48,10 +48,11 @@ export function createWebhookReconciler(deps: WebhookReconcilerDeps): WebhookRec
   const stuckGraceMs = deps.stuckGraceMs ?? DEFAULT_STUCK_GRACE_MS;
   const batchLimit = deps.batchLimit ?? DEFAULT_BATCH_LIMIT;
 
-  const reenqueue = async (d: { id: string; endpointId: string; payload: unknown }): Promise<void> => {
+  const reenqueue = async (d: { id: string; endpointId: string; traceId: string; payload: unknown }): Promise<void> => {
     const jobData: WebhookDeliveryJobData = {
       delivery_id: d.id,
       endpoint_id: d.endpointId,
+      trace_id: d.traceId, // EC-1: preserve the original trace across the orphan re-enqueue
       payload: d.payload as Record<string, unknown>,
     };
     await deps.queue.send(JOB_NAMES.WEBHOOK_DELIVERY, jobData, {

@@ -41,7 +41,7 @@ export interface WebhookEnqueuerDeps {
 export function createWebhookEnqueuer(deps: WebhookEnqueuerDeps): OnOperationTerminal {
   const clock = deps.clock ?? systemClock;
   const idgen = deps.idgen ?? createId;
-  return async ({ operationId, skillId, eventType, state }) => {
+  return async ({ operationId, skillId, traceId, eventType, state }) => {
     const endpoints = await deps.endpointsStore.listActiveForEvent(eventType);
     if (endpoints.length === 0) {
       return;
@@ -53,8 +53,8 @@ export function createWebhookEnqueuer(deps: WebhookEnqueuerDeps): OnOperationTer
     };
     for (const ep of endpoints) {
       const deliveryId = `whd_${idgen()}`;
-      await deps.endpointsStore.recordDelivery({ id: deliveryId, endpointId: ep.id, eventType, payload });
-      const jobData: WebhookDeliveryJobData = { delivery_id: deliveryId, endpoint_id: ep.id, payload };
+      await deps.endpointsStore.recordDelivery({ id: deliveryId, endpointId: ep.id, eventType, payload, traceId });
+      const jobData: WebhookDeliveryJobData = { delivery_id: deliveryId, endpoint_id: ep.id, trace_id: traceId, payload };
       await deps.queue.send(JOB_NAMES.WEBHOOK_DELIVERY, jobData, {
         ...WEBHOOK_DELIVERY_SEND_OPTIONS,
         singletonKey: deliveryId,
@@ -63,7 +63,7 @@ export function createWebhookEnqueuer(deps: WebhookEnqueuerDeps): OnOperationTer
       await deps.endpointsStore.stampEnqueued(deliveryId);
     }
     deps.logger.info(
-      { operation_id: operationId, event_type: eventType, fanout: endpoints.length },
+      { operation_id: operationId, trace_id: traceId, event_type: eventType, fanout: endpoints.length },
       'webhook fan-out enqueued',
     );
   };

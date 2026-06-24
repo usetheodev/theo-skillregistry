@@ -62,3 +62,31 @@ If your project uses a different convention (e.g., separate `tests/` mirror tree
 - Commented-out or permanently `@skip`'d tests — invisible technical debt.
 - Testing only the happy path. Bugs live in edge cases.
 - Time/randomness in unit tests — inject a clock/RNG so the test is deterministic.
+
+## § 7 — Test markers (semantic tags for selective runs)
+
+Vitest has no native pytest-style markers. This project uses a **name-prefix convention** so CI can
+run a fast subset and exclude slow/live tests, without a plugin (M9 / gap #6).
+
+| Marker | Put it where | Meaning |
+|---|---|---|
+| `[slow]` | test title prefix | heavy/long test (large fixtures, big loops) |
+| `[live]` | test title prefix | hits a real external service (network/LLM) — never in default CI |
+| `[integration]` | (implicit via `*.integration.test.ts`) | real DB/queue boundary — already separated by the `test:integration` config |
+
+Usage: `it('[slow] reindexes 10k skills', ...)` / `it('[live] embeds via OpenAI', ...)`.
+
+**Canonical fast-filter regex** (excludes `[slow]` and `[live]` by title):
+
+```
+^(?!.*\[slow\])(?!.*\[live\]).*
+```
+
+Selection commands:
+
+- Fast subset: `vitest run -t '^(?!.*\[slow\])(?!.*\[live\]).*'`
+- Everything incl. slow: `pnpm -r test`
+- Live only (manual, creds required): `vitest run -t '\[live\]'`
+
+The regex is pinned by `packages/api/tests/contract/marker-selection.contract.test.ts` so a change to
+the convention breaks a test rather than silently mis-selecting.

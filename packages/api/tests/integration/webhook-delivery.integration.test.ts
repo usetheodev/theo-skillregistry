@@ -187,6 +187,7 @@ describeIntegration('webhook delivery pipeline E2E (T5.1)', () => {
       id: 'whd_orphan',
       endpointId: 'whe_orphan',
       eventType: 'skill.created',
+      traceId: 'tr-orphan',
       payload: { event_id: 'evt_x', event_type: 'skill.created', data: { skill_id: 's', operation_id: 'op', state: 'ACTIVE', occurred_at: '2026-01-01T00:00:00Z' } },
     });
     await getPool().query("UPDATE webhook_deliveries SET create_time = now() - interval '5 minutes' WHERE id = 'whd_orphan'");
@@ -223,7 +224,7 @@ describeIntegration('webhook delivery pipeline E2E (T5.1)', () => {
   it('two concurrent reconciler sweeps re-drive an orphan exactly once (no double send)', async () => {
     const endpointsStore = createWebhookEndpointsStore(createDb(getPool()));
     await endpointsStore.create({ id: 'whe_2rec', url: 'https://hooks.example.com/in', secret: 's', eventTypes: null });
-    await endpointsStore.recordDelivery({ id: 'whd_2rec', endpointId: 'whe_2rec', eventType: 'skill.created', payload: { k: 1 } });
+    await endpointsStore.recordDelivery({ id: 'whd_2rec', endpointId: 'whe_2rec', eventType: 'skill.created', traceId: 'tr-test', payload: { k: 1 } });
     await getPool().query("UPDATE webhook_deliveries SET create_time = now() - interval '5 minutes' WHERE id = 'whd_2rec'");
 
     const reconciler = createWebhookReconciler({ endpointsStore, queue: boss, logger: createNoopLogger() });
@@ -238,7 +239,7 @@ describeIntegration('webhook delivery pipeline E2E (T5.1)', () => {
   it('reconciler re-drives a STUCK (enqueued but non-terminal) delivery (lost DLQ event)', async () => {
     const endpointsStore = createWebhookEndpointsStore(createDb(getPool()));
     await endpointsStore.create({ id: 'whe_stuck', url: 'https://hooks.example.com/in', secret: 's', eventTypes: null });
-    await endpointsStore.recordDelivery({ id: 'whd_stuck', endpointId: 'whe_stuck', eventType: 'skill.created', payload: { k: 1 } });
+    await endpointsStore.recordDelivery({ id: 'whd_stuck', endpointId: 'whe_stuck', eventType: 'skill.created', traceId: 'tr-test', payload: { k: 1 } });
     await endpointsStore.stampEnqueued('whd_stuck'); // enqueued...
     // ...but the job vanished without a terminal stamp; age it past the stuck window.
     await getPool().query("UPDATE webhook_deliveries SET enqueued_at = now() - interval '20 minutes' WHERE id = 'whd_stuck'");

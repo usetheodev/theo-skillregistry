@@ -5,8 +5,23 @@ export interface Logger {
   error(fields: Readonly<Record<string, unknown>>, msg: string): void;
 }
 
+const SENSITIVE_KEYS = new Set(['authorization', 'password', 'token', 'secret']);
+const SENSITIVE_SUFFIXES = ['_token', '_secret', '_key', '_password'];
+
+/** Redact values whose key is sensitive — exact match OR sensitive suffix (case-insensitive).
+ * `secret_findings` (diagnostic finding TYPES, not values) is intentionally NOT matched. */
+function scrubFields(fields: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    const lower = key.toLowerCase();
+    const sensitive = SENSITIVE_KEYS.has(lower) || SENSITIVE_SUFFIXES.some((s) => lower.endsWith(s));
+    out[key] = sensitive ? '[REDACTED]' : value;
+  }
+  return out;
+}
+
 function write(stream: NodeJS.WriteStream, level: string, fields: Readonly<Record<string, unknown>>, msg: string): void {
-  const line = JSON.stringify({ level, msg, ...fields, ts: new Date().toISOString() });
+  const line = JSON.stringify({ level, msg, ...scrubFields(fields), ts: new Date().toISOString() });
   stream.write(`${line}\n`);
 }
 

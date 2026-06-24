@@ -31,3 +31,6 @@ coverage/
 
 # SOTA reference clones (study-only material — never committed; see references-catalog.md)
 knowledge-base/references/
+
+# Cross-validation run artifacts (audit output incl. binary SQLite DB — not versioned)
+cross-validation-output/

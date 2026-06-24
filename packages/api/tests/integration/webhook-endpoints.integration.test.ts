@@ -106,7 +106,7 @@ describeIntegration('webhook endpoints CRUD + store (T3.1-T3.3)', () => {
     const store = createWebhookEndpointsStore(createDb(getPool()));
     await store.create({ id: 'whe_d', url: 'https://d.example', secret: 's', eventTypes: null });
     const did = `whd_${createId()}`;
-    await store.recordDelivery({ id: did, endpointId: 'whe_d', eventType: 'skill.created', payload: { a: 1 } });
+    await store.recordDelivery({ id: did, endpointId: 'whe_d', eventType: 'skill.created', traceId: 'tr-test', payload: { a: 1 } });
 
     let row = await store.getDeliveryById(did);
     expect(row?.enqueuedAt).toBeNull();
@@ -126,7 +126,7 @@ describeIntegration('webhook endpoints CRUD + store (T3.1-T3.3)', () => {
     const store = createWebhookEndpointsStore(createDb(getPool()));
     await store.create({ id: 'whe_o', url: 'https://o.example', secret: 's', eventTypes: null });
     const orphan = `whd_${createId()}`;
-    await store.recordDelivery({ id: orphan, endpointId: 'whe_o', eventType: 'skill.created', payload: {} });
+    await store.recordDelivery({ id: orphan, endpointId: 'whe_o', eventType: 'skill.created', traceId: 'tr-test', payload: {} });
     // make it "old" so the orphan window (anything older than now) catches it.
     await getPool().query("UPDATE webhook_deliveries SET create_time = now() - interval '10 minutes' WHERE id = $1", [orphan]);
 

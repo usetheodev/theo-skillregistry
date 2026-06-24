@@ -189,7 +189,7 @@ vetor) com reranking e **score explícito** na resposta.
 
 ---
 
-### M5 — [ ] CLI de dev local (lint/validate/test)
+### M5 — [x] CLI de dev local (lint/validate/test)
 
 **Objective:** Dar aos autores uma CLI que valida a skill localmente antes do upload —
 capacidade que o Google não tem.
@@ -266,6 +266,32 @@ SLO e cobertura E2E.
 
 1. Observabilidade adicionada tarde demais para guiar tuning de M4 — instrumentar incrementalmente desde M4.
 2. Rate limiting sem backpressure coerente — definir limites a partir de medições reais, não chute.
+
+---
+
+### M9 — [ ] Fechar todos os gaps do cross-validation (engenharia)
+
+**Objective:** Fechar os 7 gaps de disciplina de engenharia levantados pelo `/loop-cross-validation`
+contra o `agentic-context-engine` (ACE) em 2026-06-23 — levar os dois únicos eixos abaixo de 4/5
+(Observabilidade e CLI/DX) à paridade, mais os refinos finos de resiliência. Escopo escolhido pelo
+owner como "todos os 7 gaps num milestone", ciente da sobreposição com M8 (tracing) e do item YAGNI
+(#7). Fonte: `cross-validation-output/final_report.md`.
+
+**Definition of done:**
+
+- [ ] **Tracing (#1):** `trace_id` propagado HTTP → operation → job → webhook, logado em cada salto (uma ingestão é rastreável ponta-a-ponta). Construído como módulo OTel/trace-context **compartilhado** que o M8 reusa — sem instrumentação duplicada. Ref: `ace/tracing/_wrapper.py:52`.
+- [ ] **Scrubbing (#2):** o JSON logger redige chaves sensíveis (secret/token/authorization/password) antes de emitir; teste prova que um segredo conhecido nunca aparece na saída. Ref: `ace/observability/__init__.py:47`.
+- [ ] **Backoff (#3):** política explícita de backoff exponencial-com-jitter no webhook sender, desacoplada dos defaults do pg-boss; teste unitário sobre o schedule de delays. Ref: tenacity (`pyproject.toml:48`).
+- [ ] **CLI DX (#4 + #5):** `theoskill init` grava config local (registry URL/auth) — publish sem flags repetidas; comandos de leitura `status`/`get`/`list`/`revisions` espelham a API HTTP; exit codes scriptáveis preservados. Ref: `ace/cli/setup.py:1`.
+- [ ] **Test markers (#6):** taxonomia semântica de tags de teste (slow/live/integration) para runs seletivos no CI; documentada em `rules/testing.md`. Ref: `tests/conftest.py:1`.
+- [ ] **Provider breadth (#7 — incluído por decisão explícita do owner, apesar de YAGNI):** seleção de embedder vira registry com seam de auto-detecção (≥1 provider além de stub|openai OU o seam documentado pronto); se não houver segundo consumidor real, entregar só o seam + testes e registrar o deferimento YAGNI no plano. Ref: `ace/providers/pydantic_ai.py:1`.
+
+**Dependencies:** M2, M5.
+
+**Top risks:**
+
+1. **Duplicação de tracing com o M8.** O M8 também exige OpenTelemetry; se M9 e M8 instrumentarem independentemente, os spans colidem / o trabalho é feito duas vezes. Mitigação: módulo OTel/trace-context único em M9 que o M8 consome; registrar o seam em um ADR. (M9 pode ficar elegível antes do M8, que está bloqueado por M7.)
+2. **#7 é YAGNI (Regra Inquebrável 11).** Abstrair providers de embedder sem um segundo consumidor concreto é generalização especulativa. Mitigação: entregar o seam + um provider com necessidade real de curto prazo; se não houver, só o seam + testes, com o deferimento documentado.
 
 ---
 

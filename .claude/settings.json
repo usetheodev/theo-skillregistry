@@ -8,11 +8,18 @@
     "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/statusline.sh\""
   },
   "permissions": {
-    "defaultMode": "default",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read",
       "Glob",
       "Grep",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(pnpm *)",
+      "Bash(pnpx *)",
+      "Bash(yarn *)",
+      "Bash(node *)",
+      "Bash(corepack *)",
       "Bash(ls *)",
       "Bash(tree *)",
       "Bash(wc *)",
@@ -41,14 +48,7 @@
       "Bash(git ls-files *)",
       "Bash(git switch *)"
     ],
-    "ask": [
-      "Bash(curl *)",
-      "Bash(wget *)",
-      "Bash(npm *)",
-      "Bash(npx *)",
-      "Bash(pnpm *)",
-      "Bash(node *)"
-    ],
+    "ask": [],
     "deny": [
       "Bash(rm -rf /)",
       "Bash(rm -rf ~)",

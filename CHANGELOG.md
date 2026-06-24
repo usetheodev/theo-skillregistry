@@ -21,6 +21,7 @@ ao [Semantic Versioning](https://semver.org/).
 
 ### Security
 - O scrubbing do logger passa a recursar em valores-objeto (um segredo aninhado num campo, ex. `{ context: { authorization } }`, agora também é redigido); arrays/Date/null preservados (#10)
+- O logger é fire-and-forget: um campo patológico (referência circular, BigInt, `toJSON` que lança) NUNCA derruba o caller — emite uma linha mínima segura com `log_serialization_error` em vez de propagar (#10)
 
 ## [0.7.0] - 2026-06-24
 

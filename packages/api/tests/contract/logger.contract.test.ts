@@ -61,4 +61,14 @@ describe('createJsonLogger — sensitive-field scrubbing (T1.1 / gap #2)', () =>
     const out = captureInfo({ maybe: null });
     expect(out).toContain('"maybe":null');
   });
+
+  it('never_throws_on_a_circular_field_object', () => {
+    // A logger MUST be fire-and-forget — a pathological field (circular ref) must not crash the caller.
+    const circular: Record<string, unknown> = {};
+    circular['self'] = circular;
+    const out = captureInfo({ ctx: circular });
+    // emits a safe fallback line (never throws), still carrying the message.
+    expect(out).toContain('"msg":"msg"');
+    expect(out).toContain('log_serialization_error');
+  });
 });

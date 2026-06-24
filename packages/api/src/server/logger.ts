@@ -42,7 +42,15 @@ function scrubFields(fields: Readonly<Record<string, unknown>>): Record<string, 
 }
 
 function write(stream: NodeJS.WriteStream, level: string, fields: Readonly<Record<string, unknown>>, msg: string): void {
-  const line = JSON.stringify({ level, msg, ...scrubFields(fields), ts: new Date().toISOString() });
+  const ts = new Date().toISOString();
+  let line: string;
+  try {
+    line = JSON.stringify({ level, msg, ...scrubFields(fields), ts });
+  } catch {
+    // A logger is fire-and-forget — a pathological field (circular ref, BigInt, throwing
+    // toJSON) must NEVER crash the caller. Emit a minimal safe line instead.
+    line = JSON.stringify({ level, msg, log_serialization_error: true, ts });
+  }
   stream.write(`${line}\n`);
 }
 

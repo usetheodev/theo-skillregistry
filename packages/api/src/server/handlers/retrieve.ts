@@ -5,16 +5,18 @@ import { type Hono } from 'hono';
 import { type Logger } from '../logger.js';
 import { type DispatchingRetriever } from '../providers/retriever-selection.js';
 
-export interface Clock {
+/** Monotonic clock for latency measurement — distinct from the wall-clock in `time/clock.ts`
+ * (`now(): number` ms via performance.now, NOT a Date). Internal; injectable via deps.clock. */
+interface LatencyClock {
   now(): number;
 }
 
-const monotonicClock: Clock = { now: () => performance.now() };
+const monotonicClock: LatencyClock = { now: () => performance.now() };
 
 export interface RetrieveRoutesDeps {
   readonly retriever: DispatchingRetriever;
   readonly logger: Logger;
-  readonly clock?: Clock;
+  readonly clock?: LatencyClock;
 }
 
 /**

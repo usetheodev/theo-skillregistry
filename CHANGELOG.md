@@ -10,10 +10,12 @@ ao [Semantic Versioning](https://semver.org/).
 ### Added
 
 ### Changed
+- `Clock` (wall-clock `now(): Date`) consolidado num módulo único `api/server/time/clock.ts`, reusado pelos 3 webhook workers (DRY); o clock de latência do retrieve (`now(): number` monotônico) fica interno e renomeado para evitar confusão (#10)
 
 ### Deprecated
 
 ### Removed
+- Dependências mortas removidas: `@paralleldrive/cuid2` do `core` (não usado lá; o `api` usa+declara) e `zod` do `api` (os schemas vêm via `@usetheo/skillregistry/contract`); export morto `realClock` (#10)
 
 ### Fixed
 

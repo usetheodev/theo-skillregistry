@@ -16,7 +16,8 @@
     "db:generate": "pnpm --filter @usetheo/skillregistry db:generate",
     "compose:up": "docker compose up -d pgvector",
     "compose:down": "docker compose down",
-    "start": "pnpm --filter @usetheo/skillregistry-api start"
+    "start": "pnpm --filter @usetheo/skillregistry-api start",
+    "test:fast": "pnpm -r exec vitest run -t '^(?!.*\\[slow\\])(?!.*\\[live\\]).*'"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

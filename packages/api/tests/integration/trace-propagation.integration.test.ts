@@ -1,12 +1,12 @@
-import { type Hono } from 'hono';
-import type PgBoss from 'pg-boss';
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
-
 import {
   type WebhookSendRequest,
   type WebhookSendResponse,
   type WebhookSender,
 } from '@usetheo/skillregistry';
+import { type Hono } from 'hono';
+import type PgBoss from 'pg-boss';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+
 
 import { createApp } from '../../src/server/app.js';
 import { createDb } from '../../src/server/db.js';
@@ -18,6 +18,7 @@ import {
   registerWebhookWorker,
 } from '../../src/server/webhooks/webhook-delivery-worker.js';
 import { createWebhookEnqueuer } from '../../src/server/webhooks/webhook-enqueuer.js';
+import { createWebhookReconciler } from '../../src/server/webhooks/webhook-reconciler.js';
 import { buildWorkerHandlers } from '../../src/server/wiring.js';
 import { registerWorker } from '../../src/server/worker.js';
 
@@ -151,6 +152,28 @@ describeIntegration('trace_id propagation E2E (M9 T1.3 / gap #1)', () => {
     const seen = await Promise.all(ids.map((_, i) => deliveryTraceId(`tr-cc-${i}`)));
     expect(new Set(seen).size).toBe(3); // distinct trace ids — no cross-job leakage
     expect(seen.sort()).toEqual([...ids].sort());
+  });
+
+  it('reconciler_reenqueue_preserves_trace_id', async () => {
+    // EC-1: an orphan delivery (row persisted, never enqueued) must keep its trace_id
+    // when the reconciler re-drives it — proven by the delivery-worker log carrying it.
+    const store = createWebhookEndpointsStore(createDb(getPool()));
+    await store.create({ id: 'whe_tr', url: 'https://hooks.example.com/in', secret: 's', eventTypes: null });
+    await store.recordDelivery({
+      id: 'whd_tr',
+      endpointId: 'whe_tr',
+      eventType: 'skill.created',
+      traceId: KNOWN,
+      payload: { event_id: 'evt_x', event_type: 'skill.created', data: { skill_id: 'orphan', operation_id: 'op', state: 'ACTIVE', occurred_at: '2026-01-01T00:00:00Z' } },
+    });
+    await getPool().query("UPDATE webhook_deliveries SET create_time = now() - interval '5 minutes' WHERE id = 'whd_tr'");
+
+    const reconciler = createWebhookReconciler({ endpointsStore: store, queue: boss, logger: cap.logger });
+    expect(await reconciler.runOnce()).toBe(1);
+
+    await waitFor(() => sender.calls.length >= 1);
+    const deliverLog = cap.lines.find((l) => l.msg === 'webhook delivered' && l.fields['delivery_id'] === 'whd_tr');
+    expect(deliverLog?.fields['trace_id']).toEqual(KNOWN); // trace survived the orphan re-enqueue
   });
 
   it('generated_trace_id_when_header_malformed', async () => {
